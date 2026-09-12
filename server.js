@@ -260,17 +260,24 @@ app.post('/api/humanize', upload.single('file'), async (req, res) => {
 
 // 4. Endpoint Blueprint3D Volumétrico (Paredes com vãos, pisos e volumetria)
 app.post('/api/floorplan-3d', upload.single('file'), async (req, res) => {
-  if (!req.file) {
+  let filePath = req.file?.path;
+  const isSample = req.query.sample === 'true' || req.body?.sample === 'true' || (!req.file && fs.existsSync(path.join(__dirname, 'public/samples/Planta_3_quartos-160m2.dwg')));
+
+  if (!filePath && isSample) {
+    filePath = path.join(__dirname, 'public/samples/Planta_3_quartos-160m2.dwg');
+  }
+
+  if (!filePath) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
   }
 
-  const filePath = req.file.path;
   const cutHeight = req.body.cutHeight ? Number(req.body.cutHeight) : 1.30;
+  const shouldUnlink = req.file && filePath === req.file.path;
 
   try {
     const cadDoc = await converter.parseCadFile(filePath);
     const dxfString = await converter.toDxf(cadDoc);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    if (shouldUnlink && fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
     const result = Blueprint3D.processDxfTo3d(dxfString, { cutHeight });
 
@@ -281,7 +288,7 @@ app.post('/api/floorplan-3d', upload.single('file'), async (req, res) => {
       metadata: result.metadata
     });
   } catch (err) {
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    if (shouldUnlink && fs.existsSync(filePath)) fs.unlinkSync(filePath);
     console.error('Erro ao gerar modelo 3D volumétrico:', err);
     return res.status(500).json({
       error: 'Erro ao gerar modelo 3D volumétrico.',

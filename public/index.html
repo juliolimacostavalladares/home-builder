@@ -768,6 +768,10 @@
         <input type="file" id="fileInput" accept=".dwg,.dxf,.svg" />
       </div>
 
+      <button id="loadSampleBtn" class="btn btn-outline" style="width: 100%; font-size: 0.78rem; padding: 0.45rem; border-color: #58a6ff; color: #58a6ff; display: flex; align-items: center; justify-content: center; gap: 0.4rem; cursor: pointer;" title="Carregar planta modelo de 160m² para teste instantâneo">
+        ⚡ Carregar Planta Modelo (160m²)
+      </button>
+
       <div id="fileBadge" class="file-badge"></div>
 
       <!-- Painel 1: Modelo 3D Volumétrico (Blueprint3D) - PADRÃO -->
@@ -825,9 +829,9 @@
           </div>
         </details>
 
-        <button id="generate3dBtn" class="btn btn-primary" style="display: none;">
-          <div class="spinner" id="loading3dSpinner"></div>
-          <span id="btn3dText">🔄 Recarregar Maquete 3D</span>
+        <button id="generate3dBtn" class="btn btn-primary" style="padding: 0.65rem; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.5rem; cursor: pointer;">
+          <div class="spinner" id="loading3dSpinner" style="display: none;"></div>
+          <span id="btn3dText">🏠 Gerar / Recarregar Maquete 3D</span>
         </button>
 
         <div id="volumetricsCard" class="cad-analysis-card" style="display: none;">
@@ -995,12 +999,15 @@
         <canvas id="threeCanvas" style="width: 100%; height: 100%; display: block; outline: none;"></canvas>
 
         <!-- Estado Inicial / Convite para Upload 3D -->
-        <div id="threeEmptyState" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; z-index: 5; text-align: center; color: #8b949e; padding: 2rem;">
+        <div id="threeEmptyState" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 5; text-align: center; color: #8b949e; padding: 2rem;">
           <div style="font-size: 3.5rem; margin-bottom: 0.5rem; opacity: 0.85;">🏠</div>
           <h3 style="color: #c9d1d9; font-size: 1.25rem; margin-bottom: 0.5rem;">Modelo 3D Volumétrico Instantâneo</h3>
           <p style="font-size: 0.85rem; max-width: 440px; line-height: 1.5; color: #8b949e;">
             Selecione ou arraste seu arquivo <strong>.dwg</strong> ou <strong>.dxf</strong> para gerar a maquete volumétrica automaticamente com paredes cortadas, pisos e esquadrias.
           </p>
+          <button id="emptyLoadSampleBtn" class="btn btn-primary" style="margin-top: 1rem; font-size: 0.85rem; padding: 0.55rem 1.1rem; box-shadow: 0 4px 14px rgba(31, 111, 235, 0.4); cursor: pointer; pointer-events: auto;">
+            ⚡ Carregar Planta Modelo (160m²)
+          </button>
         </div>
 
         <!-- Overlay de Carregamento 3D Animado -->
@@ -1639,7 +1646,18 @@
       threeCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
       threeCamera.position.set(18, 20, 20);
 
-      threeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, preserveDrawingBuffer: true });
+      try {
+        threeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, preserveDrawingBuffer: true });
+      } catch (e) {
+        console.warn('WebGL com antialias falhou, tentando modo compatibilidade:', e);
+        try {
+          threeRenderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+        } catch (err2) {
+          console.error('Falha crítica ao iniciar WebGL:', err2);
+          showToast('Aviso: Não foi possível iniciar WebGL no seu navegador.');
+          return;
+        }
+      }
       threeRenderer.setSize(w, h);
       threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       threeRenderer.shadowMap.enabled = true;
@@ -1960,8 +1978,12 @@
       container.innerHTML = html;
     }
 
-    async function generateFloorplan3D() {
-      if (!selectedFile) return;
+    async function generateFloorplan3D(opts = {}) {
+      const isSample = opts.isSample === true;
+      if (!selectedFile && !isSample) {
+        fileInput.click();
+        return;
+      }
 
       generate3dBtn.disabled = true;
       loading3dSpinner.style.display = 'block';
@@ -1973,7 +1995,13 @@
       if (emptyState3d) emptyState3d.style.display = 'none';
 
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      if (isSample) {
+        formData.append('sample', 'true');
+        fileBadge.textContent = '📄 Planta_3_quartos-160m2.dwg (Modelo Exemplo)';
+        fileBadge.style.display = 'block';
+      } else {
+        formData.append('file', selectedFile);
+      }
       formData.append('cutHeight', currentCutHeight);
 
       try {
@@ -2036,13 +2064,20 @@
       } finally {
         generate3dBtn.disabled = false;
         loading3dSpinner.style.display = 'none';
-        btn3dText.textContent = '🔄 Recarregar Maquete 3D';
+        btn3dText.textContent = '🏠 Gerar / Recarregar Maquete 3D';
         if (loadingOverlay) loadingOverlay.style.display = 'none';
       }
     }
 
     // Eventos 3D
-    generate3dBtn.addEventListener('click', generateFloorplan3D);
+    generate3dBtn.addEventListener('click', () => generateFloorplan3D());
+
+    document.getElementById('loadSampleBtn').addEventListener('click', () => {
+      generateFloorplan3D({ isSample: true });
+    });
+    document.getElementById('emptyLoadSampleBtn').addEventListener('click', () => {
+      generateFloorplan3D({ isSample: true });
+    });
 
     cutHeightRange.addEventListener('input', (e) => {
       currentCutHeight = parseFloat(e.target.value);
@@ -2116,8 +2151,9 @@
       });
     });
 
-    // Inicializa direto na aba 3D
+    // Inicializa direto na aba 3D e carrega imediatamente a maquete modelo de exemplo para a tela nunca ficar vazia!
     switchTab('3d');
+    generateFloorplan3D({ isSample: true });
 
     exportGltfBtn.addEventListener('click', () => {
       if (!house3dGroup || typeof THREE.GLTFExporter === 'undefined') {
