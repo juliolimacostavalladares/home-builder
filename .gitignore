@@ -1,0 +1,19 @@
+# Dependências
+node_modules/
+.pnpm-debug.log*
+
+# Uploads temporários
+uploads/*
+!uploads/.gitkeep
+
+# Diretório de outputs (manter imagens de demonstração verificadas)
+outputs/*
+!outputs/.gitkeep
+!outputs/test_humanized_9router.png
+!outputs/test_overlay_verified.png
+
+# Variáveis de ambiente e logs
+.env
+*.log
+.DS_Store
+Thumbs.db
