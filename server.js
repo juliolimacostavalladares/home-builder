@@ -6,6 +6,7 @@ const path = require('path');
 const converter = require('./converter');
 const humanizer = require('./humanizer');
 const cadAnalyzer = require('./cadAnalyzer');
+const { Blueprint3D } = require('./blueprint3d');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -111,6 +112,8 @@ app.post('/api/analyze-cad', upload.single('file'), async (req, res) => {
   const filePath = req.file.path;
   const style = req.body.style || req.query.style || 'modern';
   const customNotes = req.body.customNotes || req.query.customNotes || '';
+  // Se noFallback não for explicitamente desativado, exige IA sem fallback silencioso
+  const noFallback = req.body.noFallback !== false && req.body.noFallback !== 'false' && req.query.noFallback !== 'false';
 
   try {
     const cadDoc = await converter.parseCadFile(filePath);
@@ -123,7 +126,8 @@ app.post('/api/analyze-cad', upload.single('file'), async (req, res) => {
       style,
       customNotes,
       humanizer.nineRouterUrl,
-      humanizer.nineRouterKey
+      humanizer.nineRouterKey,
+      { noFallback }
     );
 
     return res.json({
@@ -134,7 +138,7 @@ app.post('/api/analyze-cad', upload.single('file'), async (req, res) => {
   } catch (err) {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     console.error('Erro ao analisar CAD:', err);
-    return res.status(500).json({ error: 'Erro ao analisar arquivo CAD.', details: err.message });
+    return res.status(500).json({ error: 'Erro ao analisar arquivo CAD com IA.', details: err.message });
   }
 });
 
@@ -147,6 +151,7 @@ app.post('/api/humanize', upload.single('file'), async (req, res) => {
   const customNotes = req.body.customNotes || req.query.customNotes || '';
   const model = req.body.model || req.query.model || 'cx/gpt-image-2.5';
   const returnFormat = (req.query.format || req.body.format || 'json').toLowerCase(); // 'json' ou 'image'
+  const noFallback = req.body.noFallback === true || req.body.noFallback === 'true' || req.query.noFallback === 'true';
 
   try {
     let baseImageBuffer;
@@ -170,7 +175,8 @@ app.post('/api/humanize', upload.single('file'), async (req, res) => {
           style,
           customNotes,
           humanizer.nineRouterUrl,
-          humanizer.nineRouterKey
+          humanizer.nineRouterKey,
+          { noFallback }
         );
 
         // 2. Prepara imagem técnica e SVG quadrado
@@ -247,6 +253,38 @@ app.post('/api/humanize', upload.single('file'), async (req, res) => {
     console.error('Erro na humanização:', err);
     return res.status(500).json({
       error: 'Erro ao gerar planta humanizada.',
+      details: err.message
+    });
+  }
+});
+
+// 4. Endpoint Blueprint3D Volumétrico (Paredes com vãos, pisos e volumetria)
+app.post('/api/floorplan-3d', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
+  }
+
+  const filePath = req.file.path;
+  const cutHeight = req.body.cutHeight ? Number(req.body.cutHeight) : 1.30;
+
+  try {
+    const cadDoc = await converter.parseCadFile(filePath);
+    const dxfString = await converter.toDxf(cadDoc);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    const result = Blueprint3D.processDxfTo3d(dxfString, { cutHeight });
+
+    return res.json({
+      success: true,
+      floorplan: result.floorplan,
+      volumetrics: result.volumetrics,
+      metadata: result.metadata
+    });
+  } catch (err) {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    console.error('Erro ao gerar modelo 3D volumétrico:', err);
+    return res.status(500).json({
+      error: 'Erro ao gerar modelo 3D volumétrico.',
       details: err.message
     });
   }

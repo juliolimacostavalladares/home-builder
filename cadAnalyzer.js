@@ -105,8 +105,9 @@ class CadAnalyzer {
       } else if (/área/i.test(text) || /\d+\s*m/i.test(text)) {
         extracted.areaInfo = extracted.areaInfo || { text, position: pos };
       } else if (text.length > 2 && !/^\d+$/.test(text)) {
-        // Se ainda não estiver na lista de cômodos
-        if (!extracted.rooms.some(r => r.name.toLowerCase() === text.toLowerCase())) {
+        // Ignora anotações técnicas comuns de prancha que não são cômodos
+        const isTechnicalNote = /^(escala|esc\.?|prancha|folha|desenho|projeto|autor|data|rev|revis[ãa]o|cota|cotas|n[ií]vel|nv\.?|norte|detalhe|corte|eleva[çc][ãa]o)\b/i.test(text) || /^\d+[\s\/\.:xX-]\d+$/.test(text);
+        if (!isTechnicalNote && !extracted.rooms.some(r => r.name.toLowerCase() === text.toLowerCase())) {
           extracted.rooms.push({
             name: text,
             blockName: 'TEXT_ENTITY',
@@ -125,25 +126,33 @@ class CadAnalyzer {
    * 2. Móveis e materiais adequados por ambiente
    * 3. Prompt arquitetônico de alta fidelidade
    */
-  async interpretLayoutWithAi(cadMetadata, userStyle = 'modern', customNotes = '', nineRouterUrl, nineRouterKey) {
-    const url = (nineRouterUrl || 'http://10.0.0.107:20128/v1').replace(/\/+$/, '').replace(/\/v1$/, '') + '/v1/chat/completions';
-    const key = nineRouterKey || 'sk-4d17a0a7e062b95e-dpfpwg-9d1ccc2f';
+  async interpretLayoutWithAi(cadMetadata, userStyle = 'modern', customNotes = '', nineRouterUrl, nineRouterKey, options = {}) {
+    const url = (nineRouterUrl || process.env.NINEROUTER_URL || 'http://10.0.0.107:20128/v1').replace(/\/+$/, '').replace(/\/v1$/, '') + '/v1/chat/completions';
+    const key = nineRouterKey || process.env.NINEROUTER_KEY || 'sk-4d17a0a7e062b95e-dpfpwg-9d1ccc2f';
+    const timeoutMs = options.timeoutMs || parseInt(process.env.CAD_AI_TIMEOUT_MS, 10) || 120000; // 120s timeout padrão para plantas complexas
+    const model = options.model || process.env.CAD_ANALYZER_MODEL || 'ag/gemini-3.8-flash';
+    const allowFallback = options.allowFallback ?? (options.noFallback !== true && process.env.CAD_ALLOW_FALLBACK !== 'false');
 
     const prompt = `Analise os seguintes dados técnicos brutos extraídos diretamente do arquivo CAD (DWG/DXF):
-- Cômodos encontrados (com coordenadas): ${JSON.stringify(cadMetadata.rooms)}
+- Cômodos e textos encontrados na planta (com coordenadas): ${JSON.stringify(cadMetadata.rooms)}
 - Equipamentos e louças fixas encontradas (com coordenadas): ${JSON.stringify(cadMetadata.fixtures)}
 - Portas e acessos: ${cadMetadata.doors.length} portas identificadas
 - Informação de Área: ${JSON.stringify(cadMetadata.areaInfo)}
 - Estilo decorativo desejado: ${userStyle}
 - Preferências adicionais do cliente: ${customNotes || 'Nenhuma'}
 
+INSTRUÇÕES IMPORTANTES:
+1. Filtre apenas os ambientes/cômodos reais da residência (descarte carimbos de prancha, escalas, títulos de projeto, notas de revisão e cotas).
+2. Para cada cômodo válido, deduza sua função arquitetônica, localização espacial na planta, revestimento de piso condizente com o estilo (${userStyle}) e mobília/layout sugerido.
+3. Se foram detectados equipamentos/louças fixas, vincule-os aos cômodos correspondentes pelas coordenadas.
+
 Responda em formato JSON rigoroso (sem markdown adicional fora do bloco JSON) com a seguinte estrutura:
 {
-  "residenceSummary": "Breve resumo da residência (ex: Apartamento moderno de 2 dormitórios com 70m²)",
+  "residenceSummary": "Breve resumo da residência (ex: Residência contemporânea de 3 dormitórios com 120m²)",
   "roomsAnalysis": [
     {
-      "name": "Nome do Cômodo (ex: Dormitório Principal / Suíte)",
-      "location": "Localização na planta (ex: Superior Esquerdo / Noroeste)",
+      "name": "Nome do Cômodo (ex: Suíte Master / Dormitório 1)",
+      "location": "Localização na planta (ex: Ala Leste / Superior Direito)",
       "identifiedFixtures": ["Equipamentos encontrados nas coordenadas deste cômodo"],
       "flooring": "Piso sugerido para este cômodo de acordo com o estilo",
       "staging": "Móveis e decoração específicos para este cômodo respeitando a disposição da planta"
@@ -152,48 +161,74 @@ Responda em formato JSON rigoroso (sem markdown adicional fora do bloco JSON) co
   "imageGenerationPrompt": "Prompt arquitetônico em inglês altamente detalhado para alimentar a IA geradora de imagem (cx/gpt-image-2.5), descrevendo cada cômodo explicitamente por sua função, materiais de piso, móveis e posição das bancadas/louças identificadas no CAD, em vista superior ortográfica 2D estrita (top-down 90-degree orthographic view, completely flat, no tilt)."
 }`;
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+    let lastError = null;
+    const maxAttempts = 2;
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${key}`,
-          'Content-Type': 'application/json'
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: 'ag/gemini-3.8-flash',
-          messages: [
-            {
-              role: 'system',
-              content: 'Você é um arquiteto especialista em projetos executivos e plantas humanizadas. Analise os metadados técnicos do CAD e forneça a interpretação arquitetônica exata de cada cômodo em JSON.'
-            },
-            { role: 'user', content: prompt }
-          ],
-          stream: false
-        })
-      });
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`[CadAnalyzer] Analisando ${cadMetadata.rooms.length} cômodos via IA (${model}) no 9Router (tentativa ${attempt}/${maxAttempts}, timeout: ${Math.round(timeoutMs / 1000)}s)...`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-      clearTimeout(timeoutId);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${key}`,
+            'Content-Type': 'application/json'
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: 'system',
+                content: 'Você é um arquiteto especialista em projetos executivos e plantas humanizadas. Analise os metadados técnicos do CAD e forneça a interpretação arquitetônica exata de cada cômodo em JSON rigoroso.'
+              },
+              { role: 'user', content: prompt }
+            ],
+            stream: false
+          })
+        });
 
-      if (res.ok) {
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          throw new Error(`9Router chat HTTP ${res.status}: ${errText || res.statusText}`);
+        }
+
         const data = await res.json();
-        let rawContent = data.choices[0]?.message?.content || '';
-        // Limpa blocos de código markdown se existirem
-        rawContent = rawContent.replace(/^```(?:json)?\s*/im, '').replace(/\s*```$/m, '').trim();
-        const parsedJson = JSON.parse(rawContent);
-        console.log('[CadAnalyzer] Análise arquitetônica de cômodos concluída via 9Router.');
+        let rawContent = data.choices?.[0]?.message?.content || '';
+        let cleaned = rawContent.trim();
+        const match = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (match) {
+          cleaned = match[1].trim();
+        } else {
+          const firstBrace = cleaned.indexOf('{');
+          const lastBrace = cleaned.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+          }
+        }
+
+        const parsedJson = JSON.parse(cleaned);
+        console.log('[CadAnalyzer] Análise arquitetônica de cômodos concluída com sucesso via 9Router (IA).');
         return parsedJson;
-      } else {
-        console.warn(`[CadAnalyzer] 9Router chat retornou status ${res.status}. Usando fallback arquitetônico.`);
+      } catch (err) {
+        lastError = err;
+        console.warn(`[CadAnalyzer] Falha na tentativa ${attempt} com IA (${err.message}).`);
+        if (attempt < maxAttempts) {
+          console.log('[CadAnalyzer] Retentando chamada da IA em 1.5s...');
+          await new Promise(r => setTimeout(r, 1500));
+        }
       }
-    } catch (err) {
-      console.warn(`[CadAnalyzer] Falha ao analisar com IA (${err.message}). Usando fallback arquitetônico.`);
     }
 
-    // Fallback arquitetônico inteligente caso a IA externa não responda
+    if (!allowFallback) {
+      throw new Error(`[CadAnalyzer] Falha ao analisar com IA: ${lastError?.message || 'Sem resposta do 9Router'}`);
+    }
+
+    console.warn(`[CadAnalyzer] Todas as tentativas com IA falharam (${lastError?.message}). Usando fallback arquitetônico.`);
     return this.createFallbackAnalysis(cadMetadata, userStyle, customNotes);
   }
 

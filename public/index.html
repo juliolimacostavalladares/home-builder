@@ -7,6 +7,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Three.js e Ferramentas 3D para Blueprint3D -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -695,6 +699,40 @@
       z-index: 100;
       box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
+
+    /* Badges Flutuantes 3D de Cômodos */
+    .room-badge-3d {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      background: rgba(22, 27, 34, 0.88);
+      backdrop-filter: blur(6px);
+      border: 1px solid #388bfd;
+      color: #e6edf3;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 500;
+      white-space: nowrap;
+      pointer-events: auto;
+      cursor: default;
+      transition: opacity 0.15s, transform 0.15s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      z-index: 5;
+    }
+    .room-badge-3d:hover {
+      border-color: #58a6ff;
+      background: rgba(31, 111, 235, 0.9);
+      color: #ffffff;
+      transform: translate(-50%, -50%) scale(1.08);
+    }
+    .room-badge-area {
+      color: #8b949e;
+      font-size: 0.65rem;
+      margin-left: 0.3rem;
+    }
+    .room-badge-3d:hover .room-badge-area {
+      color: #f0f6fc;
+    }
   </style>
 </head>
 <body>
@@ -717,6 +755,7 @@
     <aside class="sidebar">
       <div class="tabs">
         <button class="tab-btn active" id="tabTechnical">📐 Planta 2D</button>
+        <button class="tab-btn" id="tab3D">🏠 Modelo 3D</button>
         <button class="tab-btn" id="tabHumanize">✨ Humanizada IA</button>
       </div>
 
@@ -755,6 +794,85 @@
         <button id="convertBtn" class="btn btn-primary" disabled>
           <div class="spinner" id="loadingSpinner"></div>
           <span id="btnText">Gerar Imagem 2D</span>
+        </button>
+      </div>
+
+      <!-- Painel 3: Modelo 3D Volumétrico (Blueprint3D) -->
+      <div id="panel3D" style="display: none; flex-direction: column; gap: 1rem;">
+        <div class="section-title">Parâmetros de Corte e Volumetria 3D</div>
+
+        <div class="form-group slider-container">
+          <div class="slider-header">
+            <span>Altura do Plano de Corte</span>
+            <span id="cutHeightVal" style="font-weight: bold; color: #58a6ff;">1.30 m</span>
+          </div>
+          <input type="range" id="cutHeightRange" min="0.50" max="2.80" step="0.10" value="1.30" />
+          <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #8b949e; margin-top: 0.2rem;">
+            <span>0.5m (Alvenarias)</span>
+            <span style="color: #58a6ff; font-weight: 600;">1.3m (Planta Baixa 3D)</span>
+            <span>2.8m (Pé-Direito Cheio)</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Predefinições de Corte:</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <button id="presetCutBtn" class="btn btn-outline" style="font-size: 0.78rem; padding: 0.45rem;">📐 Planta Baixa (1.3m)</button>
+            <button id="presetFullBtn" class="btn btn-outline" style="font-size: 0.78rem; padding: 0.45rem;">🏠 Maquete Cheia (2.8m)</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Ângulos de Câmera:</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.35rem;">
+            <button id="camIsometricBtn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.4rem;" title="Perspectiva isométrica 3D">👁️ Isométrica</button>
+            <button id="camTopBtn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.4rem;" title="Vista superior ortográfica">📐 Superior</button>
+            <button id="camFrontBtn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.4rem;" title="Fachada frontal">🚪 Frontal</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Camadas Visíveis:</label>
+          <div style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.8rem; background: #161b22; padding: 0.6rem; border-radius: 6px; border: 1px solid #30363d;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="chkShowWalls" checked /> 🧱 Paredes Volumétricas com Vãos
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="chkShowFloors" checked /> 🪵 Pisos por Cômodo (Madeira/Porcelanato)
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="chkShowOpenings" checked /> 🚪 Portas e Janelas 3D
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="chkShowLabels" checked /> 🏷️ Nomes dos Cômodos (Badges 3D)
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="chkShowFoundation" checked /> 🟩 Calçada / Fundação Base
+            </label>
+          </div>
+        </div>
+
+        <button id="generate3dBtn" class="btn btn-primary" disabled>
+          <div class="spinner" id="loading3dSpinner"></div>
+          <span id="btn3dText">🏠 Gerar Modelo 3D Volumétrico</span>
+        </button>
+
+        <div id="volumetricsCard" class="cad-analysis-card" style="display: none;">
+          <div class="cad-analysis-header">
+            <span class="cad-analysis-title">📊 Volumetria da Residência</span>
+            <span id="volRoomsBadge" style="font-size: 0.68rem; background: #21262d; padding: 0.15rem 0.45rem; border-radius: 4px; color: #58a6ff;">0 cômodos</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; font-size: 0.75rem; margin-top: 0.4rem; color: #8b949e;">
+            <div>Pé-direito: <strong style="color: #c9d1d9;">2.80 m</strong></div>
+            <div>Corte: <strong id="cardCutVal" style="color: #58a6ff;">1.30 m</strong></div>
+            <div>Paredes: <strong id="cardWallsCount" style="color: #c9d1d9;">0</strong></div>
+            <div>Esquadrias: <strong id="cardOpeningsCount" style="color: #c9d1d9;">0</strong></div>
+          </div>
+          <div class="rooms-list" id="volRoomsList" style="margin-top: 0.6rem; max-height: 180px; overflow-y: auto;"></div>
+        </div>
+
+        <button id="exportGltfBtn" class="btn btn-secondary" style="display: none;">
+          💾 Baixar Modelo 3D (GLTF / GLB)
         </button>
       </div>
 
@@ -872,6 +990,20 @@
         </div>
       </div>
 
+      <!-- Viewport 3D Three.js (Blueprint3D) -->
+      <div id="threeViewport" style="display: none; width: 100%; height: 100%; position: relative; overflow: hidden; background: #0b0f17;">
+        <canvas id="threeCanvas" style="width: 100%; height: 100%; display: block; outline: none;"></canvas>
+        <div id="threeHud" style="position: absolute; top: 1rem; left: 1rem; background: rgba(22, 27, 34, 0.88); backdrop-filter: blur(8px); border: 1px solid #30363d; border-radius: 6px; padding: 0.55rem 0.85rem; font-size: 0.74rem; color: #c9d1d9; pointer-events: none; z-index: 10; line-height: 1.5; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+          <div>🖱️ <strong>Girar 3D:</strong> Botão esquerdo + arrastar</div>
+          <div>🔍 <strong>Zoom:</strong> Roda do mouse</div>
+          <div>✋ <strong>Panorâmica:</strong> Botão direito + arrastar</div>
+          <div style="margin-top: 0.3rem; padding-top: 0.3rem; border-top: 1px solid #30363d; color: #58a6ff;">
+            Plano de corte ativo: <strong id="hudCutVal">1.30m</strong>
+          </div>
+        </div>
+        <div id="roomBadges3d" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden;"></div>
+      </div>
+
       <div class="viewer-controls" id="viewerControls" style="display: none;">
         <button id="zoomInBtn" title="Zoom +">➕</button>
         <button id="zoomOutBtn" title="Zoom -">➖</button>
@@ -895,23 +1027,50 @@
 
     // Tabs
     const tabTechnical = document.getElementById('tabTechnical');
+    const tab3D = document.getElementById('tab3D');
     const tabHumanize = document.getElementById('tabHumanize');
     const panelTechnical = document.getElementById('panelTechnical');
+    const panel3D = document.getElementById('panel3D');
     const panelHumanize = document.getElementById('panelHumanize');
+    const threeViewport = document.getElementById('threeViewport');
 
-    tabTechnical.addEventListener('click', () => {
-      tabTechnical.classList.add('active');
-      tabHumanize.classList.remove('active');
-      panelTechnical.style.display = 'flex';
-      panelHumanize.style.display = 'none';
-    });
+    function switchTab(target) {
+      tabTechnical.classList.toggle('active', target === 'technical');
+      tab3D.classList.toggle('active', target === '3d');
+      tabHumanize.classList.toggle('active', target === 'humanize');
 
-    tabHumanize.addEventListener('click', () => {
-      tabHumanize.classList.add('active');
-      tabTechnical.classList.remove('active');
-      panelHumanize.style.display = 'flex';
-      panelTechnical.style.display = 'none';
-    });
+      panelTechnical.style.display = target === 'technical' ? 'flex' : 'none';
+      panel3D.style.display = target === '3d' ? 'flex' : 'none';
+      panelHumanize.style.display = target === 'humanize' ? 'flex' : 'none';
+
+      if (target === '3d') {
+        viewport.style.display = 'none';
+        threeViewport.style.display = 'block';
+        viewerControls.style.display = 'none';
+        inspectorBar.style.display = 'none';
+        downloadBtn.style.display = 'none';
+        initThree();
+        if (selectedFile && !currentFloorplanData) {
+          generateFloorplan3D();
+        }
+      } else {
+        viewport.style.display = 'flex';
+        threeViewport.style.display = 'none';
+        if (target === 'technical') {
+          viewerControls.style.display = technicalUrl ? 'flex' : 'none';
+          inspectorBar.style.display = 'none';
+          downloadBtn.style.display = technicalUrl ? 'block' : 'none';
+        } else if (target === 'humanize') {
+          viewerControls.style.display = humanizedUrl ? 'flex' : 'none';
+          inspectorBar.style.display = humanizedUrl ? 'flex' : 'none';
+          downloadBtn.style.display = humanizedUrl ? 'block' : 'none';
+        }
+      }
+    }
+
+    tabTechnical.addEventListener('click', () => switchTab('technical'));
+    tab3D.addEventListener('click', () => switchTab('3d'));
+    tabHumanize.addEventListener('click', () => switchTab('humanize'));
 
     // Slider strength
     const strengthRange = document.getElementById('strengthRange');
@@ -962,6 +1121,9 @@
       convertBtn.disabled = false;
       analyzeBtn.disabled = false;
       humanizeBtn.disabled = false;
+      document.getElementById('generate3dBtn').disabled = false;
+      currentFloorplanData = null;
+      currentVolumetricsData = null;
     }
 
     // Renderiza o Raio-X dos Cômodos identificado no CAD
@@ -1073,12 +1235,13 @@
 
       analyzeBtn.disabled = true;
       spinner.style.display = 'block';
-      btnText.textContent = 'Lendo DXF...';
+      btnText.textContent = 'Analisando cômodos com IA...';
 
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('style', style);
       formData.append('customNotes', customNotes);
+      formData.append('noFallback', 'true');
 
       try {
         const response = await fetch('/api/analyze-cad', {
@@ -1088,7 +1251,7 @@
 
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data.details || data.error || 'Erro ao analisar cômodos');
+          throw new Error(data.details || data.error || 'Erro ao analisar cômodos com IA');
         }
 
         renderCadAnalysis(data.analysis);
@@ -1116,7 +1279,7 @@
       humanizeBtn.disabled = true;
       analyzeBtn.disabled = true;
       spinner.style.display = 'block';
-      btnText.textContent = `Interpretando & Renderizando...`;
+      btnText.textContent = 'Renderizando IA...';
 
       const formData = new FormData();
       formData.append('file', selectedFile);
@@ -1124,6 +1287,7 @@
       formData.append('style', style);
       formData.append('strength', strength);
       formData.append('customNotes', customNotes);
+      formData.append('noFallback', 'true');
 
       try {
         const response = await fetch('/api/humanize?format=json', {
@@ -1395,6 +1559,503 @@
     document.getElementById('zoomInBtn').addEventListener('click', () => { scale = Math.min(scale * 1.3, 20); updateTransform(); });
     document.getElementById('zoomOutBtn').addEventListener('click', () => { scale = Math.max(scale / 1.3, 0.2); updateTransform(); });
     document.getElementById('resetViewBtn').addEventListener('click', resetTransform);
+
+    // ==========================================
+    // ENGINE BLUEPRINT3D (THREE.JS CLIENT)
+    // ==========================================
+    let threeScene = null, threeCamera = null, threeRenderer = null, threeControls = null, house3dGroup = null;
+    let currentFloorplanData = null;
+    let currentVolumetricsData = null;
+    let currentCutHeight = 1.30;
+    let houseCenter = { x: 0, z: 0 };
+
+    const cutHeightRange = document.getElementById('cutHeightRange');
+    const cutHeightVal = document.getElementById('cutHeightVal');
+    const cardCutVal = document.getElementById('cardCutVal');
+    const hudCutVal = document.getElementById('hudCutVal');
+    const generate3dBtn = document.getElementById('generate3dBtn');
+    const loading3dSpinner = document.getElementById('loading3dSpinner');
+    const btn3dText = document.getElementById('btn3dText');
+    const volumetricsCard = document.getElementById('volumetricsCard');
+    const volRoomsBadge = document.getElementById('volRoomsBadge');
+    const cardWallsCount = document.getElementById('cardWallsCount');
+    const cardOpeningsCount = document.getElementById('cardOpeningsCount');
+    const volRoomsList = document.getElementById('volRoomsList');
+    const exportGltfBtn = document.getElementById('exportGltfBtn');
+
+    function initThree() {
+      if (threeRenderer) {
+        onWindowResize();
+        return;
+      }
+
+      const container = document.getElementById('threeViewport');
+      const canvas = document.getElementById('threeCanvas');
+
+      threeScene = new THREE.Scene();
+      threeScene.background = new THREE.Color(0x0b0f17);
+
+      const w = container.clientWidth || 800;
+      const h = container.clientHeight || 600;
+      threeCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+      threeCamera.position.set(18, 20, 20);
+
+      threeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, preserveDrawingBuffer: true });
+      threeRenderer.setSize(w, h);
+      threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      threeRenderer.shadowMap.enabled = true;
+      threeRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      threeControls = new THREE.OrbitControls(threeCamera, canvas);
+      threeControls.enableDamping = true;
+      threeControls.dampingFactor = 0.05;
+      threeControls.maxPolarAngle = Math.PI / 2 - 0.02;
+
+      // Iluminação Arquitetônica
+      const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+      threeScene.add(ambient);
+
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x22272e, 0.45);
+      hemi.position.set(0, 50, 0);
+      threeScene.add(hemi);
+
+      const sun = new THREE.DirectionalLight(0xfff8ee, 1.2);
+      sun.position.set(25, 35, 30);
+      sun.castShadow = true;
+      sun.shadow.mapSize.width = 2048;
+      sun.shadow.mapSize.height = 2048;
+      sun.shadow.camera.near = 0.5;
+      sun.shadow.camera.far = 150;
+      sun.shadow.camera.left = -25;
+      sun.shadow.camera.right = 25;
+      sun.shadow.camera.top = 25;
+      sun.shadow.camera.bottom = -25;
+      sun.shadow.bias = -0.0005;
+      threeScene.add(sun);
+
+      const grid = new THREE.GridHelper(50, 50, 0x30363d, 0x161b22);
+      grid.position.y = -0.09;
+      threeScene.add(grid);
+
+      window.addEventListener('resize', onWindowResize);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        threeControls.update();
+        threeRenderer.render(threeScene, threeCamera);
+        updateRoomBadges3d();
+      }
+      animate();
+    }
+
+    function onWindowResize() {
+      if (!threeRenderer) return;
+      const container = document.getElementById('threeViewport');
+      const w = container.clientWidth || 800;
+      const h = container.clientHeight || 600;
+      threeCamera.aspect = w / h;
+      threeCamera.updateProjectionMatrix();
+      threeRenderer.setSize(w, h);
+    }
+
+    function build3dScene(floorplan, cutHeight = 1.30) {
+      if (!threeScene || !floorplan) return;
+
+      if (house3dGroup) {
+        threeScene.remove(house3dGroup);
+      }
+      house3dGroup = new THREE.Group();
+      house3dGroup.name = 'House3D';
+
+      // 1. Encontra centro de massa do modelo para centralizar em (0, 0, 0)
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const id in floorplan.corners) {
+        const c = floorplan.corners[id];
+        if (c.x < minX) minX = c.x;
+        if (c.x > maxX) maxX = c.x;
+        if (c.y < minY) minY = c.y;
+        if (c.y > maxY) maxY = c.y;
+      }
+      if (!isFinite(minX)) {
+        minX = 0; maxX = 10; minY = 0; maxY = 10;
+      }
+      houseCenter = {
+        x: (minX + maxX) / 2,
+        z: (minY + maxY) / 2
+      };
+
+      const showWalls = document.getElementById('chkShowWalls').checked;
+      const showFloors = document.getElementById('chkShowFloors').checked;
+      const showOpenings = document.getElementById('chkShowOpenings').checked;
+      const showFoundation = document.getElementById('chkShowFoundation').checked;
+
+      // 2. PAREDES
+      if (showWalls && floorplan.walls) {
+        const wallsGroup = new THREE.Group();
+        wallsGroup.name = 'WallsGroup';
+
+        floorplan.walls.forEach(w => {
+          const c1 = floorplan.corners[w.corner1];
+          const c2 = floorplan.corners[w.corner2];
+          if (!c1 || !c2) return;
+
+          const dx = c2.x - c1.x;
+          const dy = c2.y - c1.y;
+          const length = Math.hypot(dx, dy);
+          if (length < 0.05) return;
+
+          const angle = Math.atan2(dy, dx);
+          const thickness = w.thickness || 0.15;
+          const height = Math.min(w.height || 2.80, cutHeight);
+
+          if (w.isDoorwayThreshold) {
+            // Soleira / Vão de Porta: se corte for acima de 2.10m, cria a verga superior
+            if (cutHeight > 2.10) {
+              const lintelH = cutHeight - 2.10;
+              const lintelGeo = new THREE.BoxGeometry(length, lintelH, thickness);
+              const lintelMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f3, roughness: 0.7, metalness: 0.05 });
+              const lintel = new THREE.Mesh(lintelGeo, lintelMat);
+              lintel.position.set(
+                (c1.x + c2.x) / 2 - houseCenter.x,
+                2.10 + lintelH / 2,
+                (c1.y + c2.y) / 2 - houseCenter.z
+              );
+              lintel.rotation.y = -angle;
+              lintel.castShadow = true;
+              lintel.receiveShadow = true;
+              wallsGroup.add(lintel);
+            }
+            return;
+          }
+
+          // Parede normal com recortes (holes)
+          const shape = new THREE.Shape();
+          shape.moveTo(0, 0);
+          shape.lineTo(length, 0);
+          shape.lineTo(length, height);
+          shape.lineTo(0, height);
+          shape.closePath();
+
+          if (w.items && w.items.length > 0) {
+            w.items.forEach(item => {
+              const itemW = item.width || (item.type === 'door' ? 0.80 : 1.50);
+              const itemH = item.height || (item.type === 'door' ? 2.10 : 1.20);
+              const itemSill = item.sill !== undefined ? item.sill : (item.type === 'door' ? 0 : 1.00);
+
+              if (itemSill >= height) return;
+
+              const pos = Math.max(0, Math.min(length - itemW, item.positionAlongWall || (length - itemW) / 2));
+              const effH = Math.min(itemSill + itemH, height);
+
+              if (effH > itemSill) {
+                const hole = new THREE.Path();
+                hole.moveTo(pos, itemSill);
+                hole.lineTo(pos + itemW, itemSill);
+                hole.lineTo(pos + itemW, effH);
+                hole.lineTo(pos, effH);
+                hole.closePath();
+                shape.holes.push(hole);
+              }
+            });
+          }
+
+          const extrudeSettings = { depth: thickness, bevelEnabled: false };
+          const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+          geom.translate(0, 0, -thickness / 2);
+
+          const wallMat = new THREE.MeshStandardMaterial({
+            color: 0xf5f5f7,
+            roughness: 0.65,
+            metalness: 0.05,
+            side: THREE.DoubleSide
+          });
+
+          const mesh = new THREE.Mesh(geom, wallMat);
+          mesh.position.set(c1.x - houseCenter.x, 0, c1.y - houseCenter.z);
+          mesh.rotation.y = -angle;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          wallsGroup.add(mesh);
+
+          // Se esquadrias estiverem ativas e o corte for suficiente
+          if (showOpenings && cutHeight >= 1.20 && w.items) {
+            w.items.forEach(item => {
+              const itemW = item.width || (item.type === 'door' ? 0.80 : 1.50);
+              const itemH = item.height || (item.type === 'door' ? 2.10 : 1.20);
+              const itemSill = item.sill !== undefined ? item.sill : (item.type === 'door' ? 0 : 1.00);
+              const posAlong = Math.max(0, Math.min(length - itemW, item.positionAlongWall || (length - itemW) / 2));
+
+              if (item.type === 'door' && cutHeight >= 1.50) {
+                // Porta 3D
+                const leafGeo = new THREE.BoxGeometry(itemW * 0.96, itemH * 0.98, 0.035);
+                const leafMat = new THREE.MeshStandardMaterial({ color: 0x9c7a5b, roughness: 0.6 });
+                const leaf = new THREE.Mesh(leafGeo, leafMat);
+                leaf.position.set(posAlong + itemW * 0.5, itemH / 2, 0);
+                leaf.rotation.y = Math.PI / 5; // semi-aberta
+                leaf.castShadow = true;
+
+                const doorGroup = new THREE.Group();
+                doorGroup.add(leaf);
+                doorGroup.position.set(c1.x - houseCenter.x, 0, c1.y - houseCenter.z);
+                doorGroup.rotation.y = -angle;
+                wallsGroup.add(doorGroup);
+              } else if (item.type === 'window' && cutHeight >= itemSill + 0.40) {
+                // Janela 3D
+                const winH = Math.min(itemH, cutHeight - itemSill);
+                const frameGeo = new THREE.BoxGeometry(itemW, winH, thickness * 0.7);
+                const frameMat = new THREE.MeshStandardMaterial({ color: 0x22272e, roughness: 0.3, metalness: 0.8 });
+                const frame = new THREE.Mesh(frameGeo, frameMat);
+
+                const glassGeo = new THREE.BoxGeometry(itemW * 0.92, winH * 0.92, 0.015);
+                const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x70b8ff, transparent: true, opacity: 0.4, roughness: 0.1 });
+                const glass = new THREE.Mesh(glassGeo, glassMat);
+
+                const winGroup = new THREE.Group();
+                winGroup.add(frame);
+                winGroup.add(glass);
+                winGroup.position.set(posAlong + itemW / 2, itemSill + winH / 2, 0);
+
+                const containerWin = new THREE.Group();
+                containerWin.add(winGroup);
+                containerWin.position.set(c1.x - houseCenter.x, 0, c1.y - houseCenter.z);
+                containerWin.rotation.y = -angle;
+                wallsGroup.add(containerWin);
+              }
+            });
+          }
+        });
+        house3dGroup.add(wallsGroup);
+      }
+
+      // 3. PISOS POR CÔMODO
+      if (showFloors && floorplan.rooms) {
+        const floorsGroup = new THREE.Group();
+        floorsGroup.name = 'FloorsGroup';
+
+        floorplan.rooms.forEach(r => {
+          if (!r.polygon || r.polygon.length < 3) return;
+
+          const shape = new THREE.Shape();
+          shape.moveTo(r.polygon[0].x - houseCenter.x, r.polygon[0].y - houseCenter.z);
+          for (let i = 1; i < r.polygon.length; i++) {
+            shape.lineTo(r.polygon[i].x - houseCenter.x, r.polygon[i].y - houseCenter.z);
+          }
+          shape.closePath();
+
+          const geom = new THREE.ExtrudeGeometry(shape, { depth: 0.02, bevelEnabled: false });
+          geom.rotateX(Math.PI / 2);
+
+          const name = (r.name || '').toLowerCase();
+          let color = 0xd4b896; // Madeira clara padrão
+          let rough = 0.5;
+
+          if (/wc|banh/i.test(name)) {
+            color = 0xdcdde1; // Porcelanato cinza acetinado
+            rough = 0.25;
+          } else if (/cozinh|servi/i.test(name)) {
+            color = 0xbdc3c7; // Porcelanato cinza
+            rough = 0.35;
+          } else if (/terra|abrig/i.test(name)) {
+            color = 0x95a5a6; // Pedra / calçada externa
+            rough = 0.8;
+          }
+
+          const mat = new THREE.MeshStandardMaterial({ color, roughness: rough, side: THREE.DoubleSide });
+          const floorMesh = new THREE.Mesh(geom, mat);
+          floorMesh.position.y = -0.01;
+          floorMesh.receiveShadow = true;
+          floorsGroup.add(floorMesh);
+        });
+        house3dGroup.add(floorsGroup);
+      }
+
+      // 4. FUNDAÇÃO / BASE EXTERNA
+      if (showFoundation) {
+        const pad = 2.0;
+        const w = (maxX - minX) + pad * 2;
+        const l = (maxY - minY) + pad * 2;
+        const groundGeo = new THREE.BoxGeometry(w, 0.15, l);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x1e242c, roughness: 0.95 });
+        const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+        groundMesh.position.set(0, -0.08, 0);
+        groundMesh.receiveShadow = true;
+        house3dGroup.add(groundMesh);
+      }
+
+      threeScene.add(house3dGroup);
+    }
+
+    function updateRoomBadges3d() {
+      const container = document.getElementById('roomBadges3d');
+      if (!currentFloorplanData || !currentFloorplanData.rooms || !document.getElementById('chkShowLabels').checked || !threeCamera) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const canvas = document.getElementById('threeCanvas');
+      const w = canvas.clientWidth || 800;
+      const h = canvas.clientHeight || 600;
+
+      let html = '';
+      currentFloorplanData.rooms.forEach((r) => {
+        if (!r.polygon || r.polygon.length < 3) return;
+        let cx = 0, cy = 0;
+        r.polygon.forEach(p => { cx += p.x; cy += p.y; });
+        cx /= r.polygon.length;
+        cy /= r.polygon.length;
+
+        const pos3d = new THREE.Vector3(cx - houseCenter.x, 0.4, cy - houseCenter.z);
+        pos3d.project(threeCamera);
+
+        if (pos3d.z > 1) return;
+
+        const screenX = (pos3d.x * 0.5 + 0.5) * w;
+        const screenY = (-pos3d.y * 0.5 + 0.5) * h;
+
+        html += `
+          <div class="room-badge-3d" style="left: ${screenX.toFixed(1)}px; top: ${screenY.toFixed(1)}px;">
+            ${r.name || 'Ambiente'} <span class="room-badge-area">${r.area ? r.area.toFixed(1) + ' m²' : ''}</span>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    async function generateFloorplan3D() {
+      if (!selectedFile) return;
+
+      generate3dBtn.disabled = true;
+      loading3dSpinner.style.display = 'block';
+      btn3dText.textContent = 'Gerando Maquete 3D...';
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('cutHeight', currentCutHeight);
+
+      try {
+        const response = await fetch('/api/floorplan-3d', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.details || data.error || 'Erro ao gerar modelo 3D');
+        }
+
+        currentFloorplanData = data.floorplan;
+        currentVolumetricsData = data.volumetrics;
+
+        volumetricsCard.style.display = 'block';
+        volRoomsBadge.textContent = `${data.volumetrics.totalRooms} cômodos`;
+        cardCutVal.textContent = `${currentCutHeight.toFixed(2)} m`;
+        cardWallsCount.textContent = `${data.volumetrics.totalWalls} paredes`;
+        cardOpeningsCount.textContent = `${data.volumetrics.totalDoors} portas / ${data.volumetrics.totalWindows} janelas`;
+
+        volRoomsList.innerHTML = '';
+        data.volumetrics.roomsList.forEach(r => {
+          const item = document.createElement('div');
+          item.className = 'room-item';
+          item.style.padding = '0.4rem 0.6rem';
+          item.innerHTML = `
+            <div class="room-item-top">
+              <span class="room-title">📍 ${r.name}</span>
+              <span class="room-loc" style="font-weight: 600; color: #58a6ff;">${r.area} m²</span>
+            </div>
+          `;
+          volRoomsList.appendChild(item);
+        });
+
+        exportGltfBtn.style.display = 'block';
+
+        initThree();
+        build3dScene(currentFloorplanData, currentCutHeight);
+
+        threeControls.target.set(0, 0.8, 0);
+        threeCamera.position.set(18, 20, 20);
+        threeControls.update();
+
+      } catch (err) {
+        showToast(err.message);
+      } finally {
+        generate3dBtn.disabled = false;
+        loading3dSpinner.style.display = 'none';
+        btn3dText.textContent = '🏠 Gerar Modelo 3D Volumétrico';
+      }
+    }
+
+    // Eventos 3D
+    generate3dBtn.addEventListener('click', generateFloorplan3D);
+
+    cutHeightRange.addEventListener('input', (e) => {
+      currentCutHeight = parseFloat(e.target.value);
+      cutHeightVal.textContent = currentCutHeight.toFixed(2) + ' m';
+      cardCutVal.textContent = currentCutHeight.toFixed(2) + ' m';
+      hudCutVal.textContent = currentCutHeight.toFixed(2) + 'm';
+      if (currentFloorplanData) {
+        build3dScene(currentFloorplanData, currentCutHeight);
+      }
+    });
+
+    document.getElementById('presetCutBtn').addEventListener('click', () => {
+      currentCutHeight = 1.30;
+      cutHeightRange.value = 1.30;
+      cutHeightVal.textContent = '1.30 m';
+      cardCutVal.textContent = '1.30 m';
+      hudCutVal.textContent = '1.30m';
+      if (currentFloorplanData) build3dScene(currentFloorplanData, currentCutHeight);
+    });
+
+    document.getElementById('presetFullBtn').addEventListener('click', () => {
+      currentCutHeight = 2.80;
+      cutHeightRange.value = 2.80;
+      cutHeightVal.textContent = '2.80 m';
+      cardCutVal.textContent = '2.80 m';
+      hudCutVal.textContent = '2.80m';
+      if (currentFloorplanData) build3dScene(currentFloorplanData, currentCutHeight);
+    });
+
+    document.getElementById('camIsometricBtn').addEventListener('click', () => {
+      if (!threeControls) return;
+      threeControls.target.set(0, 0.8, 0);
+      threeCamera.position.set(18, 20, 20);
+      threeControls.update();
+    });
+
+    document.getElementById('camTopBtn').addEventListener('click', () => {
+      if (!threeControls) return;
+      threeControls.target.set(0, 0, 0);
+      threeCamera.position.set(0, 28, 0.01);
+      threeControls.update();
+    });
+
+    document.getElementById('camFrontBtn').addEventListener('click', () => {
+      if (!threeControls) return;
+      threeControls.target.set(0, 1.2, 0);
+      threeCamera.position.set(0, 3, 22);
+      threeControls.update();
+    });
+
+    ['chkShowWalls', 'chkShowFloors', 'chkShowOpenings', 'chkShowLabels', 'chkShowFoundation'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        if (currentFloorplanData) build3dScene(currentFloorplanData, currentCutHeight);
+      });
+    });
+
+    exportGltfBtn.addEventListener('click', () => {
+      if (!house3dGroup || typeof THREE.GLTFExporter === 'undefined') {
+        showToast('Modelo 3D ainda não carregado ou GLTFExporter indisponível.');
+        return;
+      }
+      const exporter = new THREE.GLTFExporter();
+      exporter.parse(house3dGroup, (gltf) => {
+        const blob = new Blob([JSON.stringify(gltf, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, '') : 'modelo'}_planta_3d.gltf`;
+        a.click();
+      }, { binary: false });
+    });
   </script>
 </body>
 </html>
