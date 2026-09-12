@@ -228,18 +228,27 @@ class CadToFloorplan {
       }
     });
 
-    // Mapeia textos para cômodos contíguos
+    // Mapeia textos para cômodos contíguos com priorização semântica de escala
+    const isWc = name => /w\.?c\.?|banh|lavab/i.test(name);
+    const isBed = name => /dormi|quart|suit/i.test(name);
+    const isKitchen = name => /cozinh|servi/i.test(name);
+
     const usedTexts = new Set();
-    floorplan.rooms.forEach((room, idx) => {
+    const sortedRooms = [...floorplan.rooms].sort((a, b) => b.area - a.area);
+
+    sortedRooms.forEach((room, idx) => {
       const polygon = room.getPolygonPoints();
-      // Tenta primeiro ponto dentro do polígono
+      // 1. Tenta primeiro ponto estritamente dentro do polígono
       let match = roomTexts.find(rt => !usedTexts.has(rt) && Utils.pointInPolygon(rt.pos.x, rt.pos.y, polygon));
 
+      // 2. Se não estiver contido, busca o texto mais próximo compatível com o tamanho do cômodo
       if (!match) {
         const center = room.getCenter();
-        let minDist = 2.0;
+        let minDist = 5.5;
         for (const rt of roomTexts) {
           if (usedTexts.has(rt)) continue;
+          if (room.area > 6.0 && isWc(rt.name)) continue; // Cômodo grande não é banheiro
+          if (room.area < 3.2 && isBed(rt.name)) continue; // Cômodo pequeno não é dormitório
           const d = Math.hypot(center.x - rt.pos.x, center.y - rt.pos.y);
           if (d < minDist) {
             minDist = d;
@@ -262,11 +271,19 @@ class CadToFloorplan {
 
         room.name = clean;
       } else {
-        room.name = `Ambiente ${idx + 1}`;
+        if (room.area < 2.0) {
+          room.name = 'Lavabo / Circulação';
+        } else if (room.area < 3.5) {
+          room.name = 'Banheiro (W.C.)';
+        } else if (room.area >= 10.0) {
+          room.name = 'Dormitório';
+        } else {
+          room.name = `Ambiente ${idx + 1}`;
+        }
       }
 
       // Atribui o piso apropriado
-      if (/banh|w\.?c\.?|cozinh|servi/i.test(room.name)) {
+      if (/banh|w\.?c\.?|cozinh|servi|lavab/i.test(room.name)) {
         room.floorType = 'porcelain';
       } else if (/terra|abrig/i.test(room.name)) {
         room.floorType = 'exterior';

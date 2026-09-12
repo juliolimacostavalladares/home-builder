@@ -754,8 +754,8 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="tabs">
-        <button class="tab-btn active" id="tabTechnical">📐 Planta 2D</button>
-        <button class="tab-btn" id="tab3D">🏠 Modelo 3D</button>
+        <button class="tab-btn active" id="tab3D">🏠 Modelo 3D</button>
+        <button class="tab-btn" id="tabTechnical">📐 Planta 2D</button>
         <button class="tab-btn" id="tabHumanize">✨ Humanizada IA</button>
       </div>
 
@@ -764,14 +764,93 @@
       <div class="dropzone" id="dropzone">
         <div class="dropzone-icon">📁</div>
         <p>Arraste o arquivo <strong>.dwg</strong> ou <strong>.dxf</strong></p>
-        <small>ou clique para selecionar</small>
+        <small>Geração 3D automática ao importar</small>
         <input type="file" id="fileInput" accept=".dwg,.dxf,.svg" />
       </div>
 
       <div id="fileBadge" class="file-badge"></div>
 
-      <!-- Painel 1: Técnico 2D -->
-      <div id="panelTechnical" style="display: flex; flex-direction: column; gap: 1rem;">
+      <!-- Painel 1: Modelo 3D Volumétrico (Blueprint3D) - PADRÃO -->
+      <div id="panel3D" style="display: flex; flex-direction: column; gap: 0.9rem;">
+        <div class="section-title">Corte Arquitetônico & Volumetria</div>
+
+        <div class="form-group slider-container">
+          <div class="slider-header">
+            <span>Plano de Corte em Tempo Real</span>
+            <span id="cutHeightVal" style="font-weight: bold; color: #58a6ff;">1.30 m</span>
+          </div>
+          <input type="range" id="cutHeightRange" min="0.50" max="2.80" step="0.10" value="1.30" />
+          <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #8b949e; margin-top: 0.2rem;">
+            <span>0.5m (Alvenarias)</span>
+            <span style="color: #58a6ff; font-weight: 600;">1.3m (Planta Baixa 3D)</span>
+            <span>2.8m (Pé-Direito Cheio)</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Predefinições Rápidas:</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <button id="presetCutBtn" class="btn btn-outline" style="font-size: 0.8rem; padding: 0.5rem; font-weight: 600;">📐 Planta Baixa (1.3m)</button>
+            <button id="presetFullBtn" class="btn btn-outline" style="font-size: 0.8rem; padding: 0.5rem; font-weight: 600;">🏠 Maquete Cheia (2.8m)</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Câmera:</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.35rem;">
+            <button id="camIsometricBtn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.4rem;" title="Perspectiva isométrica 3D">👁️ 3D</button>
+            <button id="camTopBtn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.4rem;" title="Vista superior ortográfica">📐 Planta</button>
+            <button id="camFrontBtn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.4rem;" title="Fachada frontal">🚪 Fachada</button>
+          </div>
+        </div>
+
+        <details style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 0.45rem 0.6rem; font-size: 0.78rem;">
+          <summary style="cursor: pointer; font-weight: 600; color: #8b949e;">⚙️ Opções de Camadas Visíveis</summary>
+          <div style="display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.5rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="chkShowWalls" checked /> 🧱 Paredes com Vãos
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="chkShowFloors" checked /> 🪵 Pisos Texturizados
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="chkShowOpenings" checked /> 🚪 Portas e Janelas 3D
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="chkShowLabels" checked /> 🏷️ Badges 3D dos Cômodos
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="chkShowFoundation" checked /> 🟩 Calçada / Fundação
+            </label>
+          </div>
+        </details>
+
+        <button id="generate3dBtn" class="btn btn-primary" style="display: none;">
+          <div class="spinner" id="loading3dSpinner"></div>
+          <span id="btn3dText">🔄 Recarregar Maquete 3D</span>
+        </button>
+
+        <div id="volumetricsCard" class="cad-analysis-card" style="display: none;">
+          <div class="cad-analysis-header">
+            <span class="cad-analysis-title">📊 Volumetria da Residência</span>
+            <span id="volRoomsBadge" style="font-size: 0.68rem; background: #21262d; padding: 0.15rem 0.45rem; border-radius: 4px; color: #58a6ff;">0 cômodos</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; font-size: 0.75rem; margin-top: 0.4rem; color: #8b949e;">
+            <div>Pé-direito: <strong style="color: #c9d1d9;">2.80 m</strong></div>
+            <div>Corte: <strong id="cardCutVal" style="color: #58a6ff;">1.30 m</strong></div>
+            <div>Paredes: <strong id="cardWallsCount" style="color: #c9d1d9;">0</strong></div>
+            <div>Esquadrias: <strong id="cardOpeningsCount" style="color: #c9d1d9;">0</strong></div>
+          </div>
+          <div class="rooms-list" id="volRoomsList" style="margin-top: 0.6rem; max-height: 180px; overflow-y: auto;"></div>
+        </div>
+
+        <button id="exportGltfBtn" class="btn btn-secondary" style="display: none;">
+          💾 Baixar Modelo 3D (GLTF / GLB)
+        </button>
+      </div>
+
+      <!-- Painel 2: Técnico 2D -->
+      <div id="panelTechnical" style="display: none; flex-direction: column; gap: 1rem;">
         <div class="section-title">Opções 2D</div>
         <div class="form-group">
           <label for="formatSelect">Formato da Imagem:</label>
@@ -797,86 +876,7 @@
         </button>
       </div>
 
-      <!-- Painel 3: Modelo 3D Volumétrico (Blueprint3D) -->
-      <div id="panel3D" style="display: none; flex-direction: column; gap: 1rem;">
-        <div class="section-title">Parâmetros de Corte e Volumetria 3D</div>
-
-        <div class="form-group slider-container">
-          <div class="slider-header">
-            <span>Altura do Plano de Corte</span>
-            <span id="cutHeightVal" style="font-weight: bold; color: #58a6ff;">1.30 m</span>
-          </div>
-          <input type="range" id="cutHeightRange" min="0.50" max="2.80" step="0.10" value="1.30" />
-          <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #8b949e; margin-top: 0.2rem;">
-            <span>0.5m (Alvenarias)</span>
-            <span style="color: #58a6ff; font-weight: 600;">1.3m (Planta Baixa 3D)</span>
-            <span>2.8m (Pé-Direito Cheio)</span>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>Predefinições de Corte:</label>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-            <button id="presetCutBtn" class="btn btn-outline" style="font-size: 0.78rem; padding: 0.45rem;">📐 Planta Baixa (1.3m)</button>
-            <button id="presetFullBtn" class="btn btn-outline" style="font-size: 0.78rem; padding: 0.45rem;">🏠 Maquete Cheia (2.8m)</button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>Ângulos de Câmera:</label>
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.35rem;">
-            <button id="camIsometricBtn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.4rem;" title="Perspectiva isométrica 3D">👁️ Isométrica</button>
-            <button id="camTopBtn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.4rem;" title="Vista superior ortográfica">📐 Superior</button>
-            <button id="camFrontBtn" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.4rem;" title="Fachada frontal">🚪 Frontal</button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>Camadas Visíveis:</label>
-          <div style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.8rem; background: #161b22; padding: 0.6rem; border-radius: 6px; border: 1px solid #30363d;">
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" id="chkShowWalls" checked /> 🧱 Paredes Volumétricas com Vãos
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" id="chkShowFloors" checked /> 🪵 Pisos por Cômodo (Madeira/Porcelanato)
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" id="chkShowOpenings" checked /> 🚪 Portas e Janelas 3D
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" id="chkShowLabels" checked /> 🏷️ Nomes dos Cômodos (Badges 3D)
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" id="chkShowFoundation" checked /> 🟩 Calçada / Fundação Base
-            </label>
-          </div>
-        </div>
-
-        <button id="generate3dBtn" class="btn btn-primary" disabled>
-          <div class="spinner" id="loading3dSpinner"></div>
-          <span id="btn3dText">🏠 Gerar Modelo 3D Volumétrico</span>
-        </button>
-
-        <div id="volumetricsCard" class="cad-analysis-card" style="display: none;">
-          <div class="cad-analysis-header">
-            <span class="cad-analysis-title">📊 Volumetria da Residência</span>
-            <span id="volRoomsBadge" style="font-size: 0.68rem; background: #21262d; padding: 0.15rem 0.45rem; border-radius: 4px; color: #58a6ff;">0 cômodos</span>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; font-size: 0.75rem; margin-top: 0.4rem; color: #8b949e;">
-            <div>Pé-direito: <strong style="color: #c9d1d9;">2.80 m</strong></div>
-            <div>Corte: <strong id="cardCutVal" style="color: #58a6ff;">1.30 m</strong></div>
-            <div>Paredes: <strong id="cardWallsCount" style="color: #c9d1d9;">0</strong></div>
-            <div>Esquadrias: <strong id="cardOpeningsCount" style="color: #c9d1d9;">0</strong></div>
-          </div>
-          <div class="rooms-list" id="volRoomsList" style="margin-top: 0.6rem; max-height: 180px; overflow-y: auto;"></div>
-        </div>
-
-        <button id="exportGltfBtn" class="btn btn-secondary" style="display: none;">
-          💾 Baixar Modelo 3D (GLTF / GLB)
-        </button>
-      </div>
-
-      <!-- Painel 2: Planta Humanizada IA -->
+      <!-- Painel 3: Planta Humanizada IA -->
       <div id="panelHumanize" style="display: none; flex-direction: column; gap: 1rem;">
         <div class="section-title">Configurações de Decoração IA</div>
         
@@ -979,8 +979,8 @@
         </div>
       </div>
 
-      <!-- Viewport com Pan e Zoom -->
-      <div class="viewer-viewport" id="viewport">
+      <!-- Viewport com Pan e Zoom (2D Técnico / Humanizada) -->
+      <div class="viewer-viewport" id="viewport" style="display: none;">
         <div class="viewer-content" id="viewerContent">
           <div class="empty-state" id="emptyState">
             <div class="empty-state-icon">📄</div>
@@ -990,9 +990,36 @@
         </div>
       </div>
 
-      <!-- Viewport 3D Three.js (Blueprint3D) -->
-      <div id="threeViewport" style="display: none; width: 100%; height: 100%; position: relative; overflow: hidden; background: #0b0f17;">
+      <!-- Viewport 3D Three.js (Blueprint3D) - PADRÃO VISÍVEL -->
+      <div id="threeViewport" style="display: block; width: 100%; height: 100%; position: relative; overflow: hidden; background: #0b0f17;">
         <canvas id="threeCanvas" style="width: 100%; height: 100%; display: block; outline: none;"></canvas>
+
+        <!-- Estado Inicial / Convite para Upload 3D -->
+        <div id="threeEmptyState" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; z-index: 5; text-align: center; color: #8b949e; padding: 2rem;">
+          <div style="font-size: 3.5rem; margin-bottom: 0.5rem; opacity: 0.85;">🏠</div>
+          <h3 style="color: #c9d1d9; font-size: 1.25rem; margin-bottom: 0.5rem;">Modelo 3D Volumétrico Instantâneo</h3>
+          <p style="font-size: 0.85rem; max-width: 440px; line-height: 1.5; color: #8b949e;">
+            Selecione ou arraste seu arquivo <strong>.dwg</strong> ou <strong>.dxf</strong> para gerar a maquete volumétrica automaticamente com paredes cortadas, pisos e esquadrias.
+          </p>
+        </div>
+
+        <!-- Overlay de Carregamento 3D Animado -->
+        <div id="threeLoadingOverlay" style="display: none; position: absolute; inset: 0; background: rgba(11, 15, 23, 0.88); backdrop-filter: blur(8px); z-index: 25; flex-direction: column; align-items: center; justify-content: center; gap: 0.9rem; color: #f0f6fc;">
+          <div class="spinner" style="width: 38px; height: 38px; border-width: 3px; border-color: rgba(88, 166, 255, 0.2); border-top-color: #58a6ff; display: block;"></div>
+          <div style="font-weight: 600; font-size: 1.05rem; color: #58a6ff;">Gerando Maquete 3D Volumétrica...</div>
+          <div style="font-size: 0.8rem; color: #8b949e;">Processando alvenaria, vãos de portas, janelas e pisos</div>
+        </div>
+
+        <!-- Barra Rápida Flutuante Superior -->
+        <div id="threeTopBar" style="position: absolute; top: 1rem; right: 1rem; display: flex; align-items: center; gap: 0.4rem; z-index: 15; background: rgba(22, 27, 34, 0.88); backdrop-filter: blur(8px); padding: 0.35rem 0.55rem; border-radius: 8px; border: 1px solid #30363d; box-shadow: 0 4px 14px rgba(0,0,0,0.4);">
+          <button id="quickCut130" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; font-weight: 600;" title="Planta Baixa 3D Cortada a 1.30m">📐 1.30m</button>
+          <button id="quickCut280" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; font-weight: 600;" title="Maquete Cheia até o Teto">🏠 2.80m</button>
+          <div style="width: 1px; height: 16px; background: #30363d; margin: 0 0.2rem;"></div>
+          <button id="quickCamIso" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" title="Câmera Isométrica 3D">👁️ 3D</button>
+          <button id="quickCamTop" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" title="Câmera Superior (Planta)">📐 Topo</button>
+          <button id="quickDownloadGltf" class="btn btn-primary" style="padding: 0.3rem 0.7rem; font-size: 0.75rem; font-weight: 600; display: none;" title="Baixar Modelo 3D (GLTF)">💾 Baixar 3D</button>
+        </div>
+
         <div id="threeHud" style="position: absolute; top: 1rem; left: 1rem; background: rgba(22, 27, 34, 0.88); backdrop-filter: blur(8px); border: 1px solid #30363d; border-radius: 6px; padding: 0.55rem 0.85rem; font-size: 0.74rem; color: #c9d1d9; pointer-events: none; z-index: 10; line-height: 1.5; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
           <div>🖱️ <strong>Girar 3D:</strong> Botão esquerdo + arrastar</div>
           <div>🔍 <strong>Zoom:</strong> Roda do mouse</div>
@@ -1114,6 +1141,13 @@
       if (e.target.files.length) handleFile(e.target.files[0]);
     });
 
+    // Suporte a arrastar arquivo diretamente para a área 3D
+    threeViewport.addEventListener('dragover', (e) => { e.preventDefault(); });
+    threeViewport.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+
     function handleFile(file) {
       selectedFile = file;
       fileBadge.textContent = `📄 ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
@@ -1124,6 +1158,11 @@
       document.getElementById('generate3dBtn').disabled = false;
       currentFloorplanData = null;
       currentVolumetricsData = null;
+
+      // EXPERIÊNCIA ZERO-CONFIGURAÇÃO:
+      // Ao importar o arquivo, já ativa a aba 3D e gera a maquete volumétrica instantaneamente!
+      switchTab('3d');
+      generateFloorplan3D();
     }
 
     // Renderiza o Raio-X dos Cômodos identificado no CAD
@@ -1926,7 +1965,12 @@
 
       generate3dBtn.disabled = true;
       loading3dSpinner.style.display = 'block';
-      btn3dText.textContent = 'Gerando Maquete 3D...';
+      btn3dText.textContent = 'Processando CAD...';
+
+      const loadingOverlay = document.getElementById('threeLoadingOverlay');
+      const emptyState3d = document.getElementById('threeEmptyState');
+      if (loadingOverlay) loadingOverlay.style.display = 'flex';
+      if (emptyState3d) emptyState3d.style.display = 'none';
 
       const formData = new FormData();
       formData.append('file', selectedFile);
@@ -1956,17 +2000,28 @@
         data.volumetrics.roomsList.forEach(r => {
           const item = document.createElement('div');
           item.className = 'room-item';
-          item.style.padding = '0.4rem 0.6rem';
+          item.style.padding = '0.45rem 0.65rem';
+          item.style.cursor = 'pointer';
+          item.title = 'Clique para focar a câmera 3D neste cômodo';
           item.innerHTML = `
             <div class="room-item-top">
               <span class="room-title">📍 ${r.name}</span>
               <span class="room-loc" style="font-weight: 600; color: #58a6ff;">${r.area} m²</span>
             </div>
           `;
+          item.addEventListener('click', () => {
+            if (threeControls && r.center) {
+              threeControls.target.set(r.center.x - houseCenter.x, 0.4, r.center.y - houseCenter.z);
+              threeCamera.position.set(r.center.x - houseCenter.x, 6, r.center.y - houseCenter.z + 7);
+              threeControls.update();
+            }
+          });
           volRoomsList.appendChild(item);
         });
 
         exportGltfBtn.style.display = 'block';
+        const quickDl = document.getElementById('quickDownloadGltf');
+        if (quickDl) quickDl.style.display = 'block';
 
         initThree();
         build3dScene(currentFloorplanData, currentCutHeight);
@@ -1977,10 +2032,12 @@
 
       } catch (err) {
         showToast(err.message);
+        if (emptyState3d && !currentFloorplanData) emptyState3d.style.display = 'flex';
       } finally {
         generate3dBtn.disabled = false;
         loading3dSpinner.style.display = 'none';
-        btn3dText.textContent = '🏠 Gerar Modelo 3D Volumétrico';
+        btn3dText.textContent = '🔄 Recarregar Maquete 3D';
+        if (loadingOverlay) loadingOverlay.style.display = 'none';
       }
     }
 
@@ -2036,11 +2093,31 @@
       threeControls.update();
     });
 
+    // Conecta botões da barra flutuante rápida
+    document.getElementById('quickCut130').addEventListener('click', () => {
+      document.getElementById('presetCutBtn').click();
+    });
+    document.getElementById('quickCut280').addEventListener('click', () => {
+      document.getElementById('presetFullBtn').click();
+    });
+    document.getElementById('quickCamIso').addEventListener('click', () => {
+      document.getElementById('camIsometricBtn').click();
+    });
+    document.getElementById('quickCamTop').addEventListener('click', () => {
+      document.getElementById('camTopBtn').click();
+    });
+    document.getElementById('quickDownloadGltf').addEventListener('click', () => {
+      exportGltfBtn.click();
+    });
+
     ['chkShowWalls', 'chkShowFloors', 'chkShowOpenings', 'chkShowLabels', 'chkShowFoundation'].forEach(id => {
       document.getElementById(id).addEventListener('change', () => {
         if (currentFloorplanData) build3dScene(currentFloorplanData, currentCutHeight);
       });
     });
+
+    // Inicializa direto na aba 3D
+    switchTab('3d');
 
     exportGltfBtn.addEventListener('click', () => {
       if (!house3dGroup || typeof THREE.GLTFExporter === 'undefined') {
