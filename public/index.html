@@ -1017,6 +1017,12 @@
           <div style="font-size: 0.8rem; color: #8b949e;">Processando alvenaria, vãos de portas, janelas e pisos</div>
         </div>
 
+        <!-- Aviso de Fallback 2D / Reativação WebGL -->
+        <div id="webglFallbackNotice" style="display: none; position: absolute; top: 1rem; left: 50%; transform: translateX(-50%); background: rgba(22, 27, 34, 0.95); border: 1px solid #388bfd; border-radius: 8px; padding: 0.4rem 0.85rem; color: #c9d1d9; font-size: 0.78rem; z-index: 20; align-items: center; gap: 0.6rem; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
+          <span>💡 Visualização 2D Ativa (WebGL ocupado ou desabilitado)</span>
+          <button id="retryWebglBtn" class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; border-color: #58a6ff; color: #58a6ff; cursor: pointer;">🔄 Ativar 3D</button>
+        </div>
+
         <!-- Barra Rápida Flutuante Superior -->
         <div id="threeTopBar" style="position: absolute; top: 1rem; right: 1rem; display: flex; align-items: center; gap: 0.4rem; z-index: 15; background: rgba(22, 27, 34, 0.88); backdrop-filter: blur(8px); padding: 0.35rem 0.55rem; border-radius: 8px; border: 1px solid #30363d; box-shadow: 0 4px 14px rgba(0,0,0,0.4);">
           <button id="quickCut130" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; font-weight: 600;" title="Planta Baixa 3D Cortada a 1.30m">📐 1.30m</button>
@@ -1629,94 +1635,325 @@
     const volRoomsList = document.getElementById('volRoomsList');
     const exportGltfBtn = document.getElementById('exportGltfBtn');
 
-    function initThree() {
-      if (threeRenderer) {
+    let animFrameId = null;
+    let is2dFallbackMode = false;
+
+    function initThree(forceReset = false) {
+      if (threeRenderer && !forceReset) {
         onWindowResize();
-        return;
+        return true;
+      }
+
+      if (forceReset && threeRenderer) {
+        try {
+          threeRenderer.dispose();
+        } catch (e) {}
+        threeRenderer = null;
+        threeControls = null;
       }
 
       const container = document.getElementById('threeViewport');
-      const canvas = document.getElementById('threeCanvas');
+      let canvas = document.getElementById('threeCanvas');
+      if (!container) return false;
 
-      threeScene = new THREE.Scene();
-      threeScene.background = new THREE.Color(0x0b0f17);
+      // Sempre garanta um elemento canvas limpo para evitar contaminação de contexto WebGL anterior
+      if (!canvas || forceReset || is2dFallbackMode || (canvas.getContext && canvas.getContext('2d'))) {
+        const freshCanvas = document.createElement('canvas');
+        freshCanvas.id = 'threeCanvas';
+        freshCanvas.style.cssText = 'width: 100%; height: 100%; display: block; outline: none;';
+        if (canvas && canvas.parentNode) {
+          canvas.parentNode.replaceChild(freshCanvas, canvas);
+        } else {
+          container.prepend(freshCanvas);
+        }
+        canvas = freshCanvas;
+        is2dFallbackMode = false;
+      }
 
       const w = container.clientWidth || 800;
       const h = container.clientHeight || 600;
-      threeCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
-      threeCamera.position.set(18, 20, 20);
 
-      try {
-        threeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, preserveDrawingBuffer: true });
-      } catch (e) {
-        console.warn('WebGL com antialias falhou, tentando modo compatibilidade:', e);
+      if (!threeScene) {
+        threeScene = new THREE.Scene();
+        threeScene.background = new THREE.Color(0x0b0f17);
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+        threeScene.add(ambient);
+
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x22272e, 0.45);
+        hemi.position.set(0, 50, 0);
+        threeScene.add(hemi);
+
+        const sun = new THREE.DirectionalLight(0xfff8ee, 1.2);
+        sun.position.set(25, 35, 30);
+        sun.castShadow = true;
+        sun.shadow.mapSize.width = 1024;
+        sun.shadow.mapSize.height = 1024;
+        sun.shadow.camera.near = 0.5;
+        sun.shadow.camera.far = 150;
+        sun.shadow.camera.left = -25;
+        sun.shadow.camera.right = 25;
+        sun.shadow.camera.top = 25;
+        sun.shadow.camera.bottom = -25;
+        sun.shadow.bias = -0.0005;
+        threeScene.add(sun);
+
+        const grid = new THREE.GridHelper(50, 50, 0x30363d, 0x161b22);
+        grid.position.y = -0.09;
+        threeScene.add(grid);
+      }
+
+      if (!threeCamera) {
+        threeCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+        threeCamera.position.set(18, 20, 20);
+      } else {
+        threeCamera.aspect = w / h;
+        threeCamera.updateProjectionMatrix();
+      }
+
+      let renderer = null;
+      const configs = [
+        { antialias: true, alpha: true, powerPreference: 'default' },
+        { antialias: false, alpha: true, powerPreference: 'default' },
+        { antialias: false, alpha: true, failIfMajorPerformanceCaveat: false, powerPreference: 'low-power' }
+      ];
+
+      for (const cfg of configs) {
         try {
-          threeRenderer = new THREE.WebGLRenderer({ canvas, antialias: false });
-        } catch (err2) {
-          console.error('Falha crítica ao iniciar WebGL:', err2);
-          showToast('Aviso: Não foi possível iniciar WebGL no seu navegador.');
-          return;
+          renderer = new THREE.WebGLRenderer({ canvas, ...cfg });
+          if (renderer && renderer.getContext()) {
+            break;
+          }
+        } catch (err) {
+          console.warn('Configuração WebGL alternativa:', cfg, err);
+          renderer = null;
+          const fresh = document.createElement('canvas');
+          fresh.id = 'threeCanvas';
+          fresh.style.cssText = 'width: 100%; height: 100%; display: block; outline: none;';
+          canvas.parentNode.replaceChild(fresh, canvas);
+          canvas = fresh;
         }
       }
+
+      if (!renderer) {
+        console.warn('WebGL indisponível neste navegador. Ativando modo arquitetônico 2D.');
+        is2dFallbackMode = true;
+        const notice = document.getElementById('webglFallbackNotice');
+        if (notice) notice.style.display = 'flex';
+        return false;
+      }
+
+      const notice = document.getElementById('webglFallbackNotice');
+      if (notice) notice.style.display = 'none';
+
+      threeRenderer = renderer;
       threeRenderer.setSize(w, h);
-      threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
       threeRenderer.shadowMap.enabled = true;
       threeRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-      threeControls = new THREE.OrbitControls(threeCamera, canvas);
-      threeControls.enableDamping = true;
-      threeControls.dampingFactor = 0.05;
-      threeControls.maxPolarAngle = Math.PI / 2 - 0.02;
+      canvas.addEventListener('webglcontextlost', (e) => {
+        e.preventDefault();
+        console.warn('Contexto WebGL perdido temporariamente.');
+      }, false);
 
-      // Iluminação Arquitetônica
-      const ambient = new THREE.AmbientLight(0xffffff, 0.65);
-      threeScene.add(ambient);
+      canvas.addEventListener('webglcontextrestored', () => {
+        console.log('Contexto WebGL restaurado.');
+        initThree(true);
+        if (currentFloorplanData) build3dScene(currentFloorplanData, currentCutHeight);
+      }, false);
 
-      const hemi = new THREE.HemisphereLight(0xffffff, 0x22272e, 0.45);
-      hemi.position.set(0, 50, 0);
-      threeScene.add(hemi);
-
-      const sun = new THREE.DirectionalLight(0xfff8ee, 1.2);
-      sun.position.set(25, 35, 30);
-      sun.castShadow = true;
-      sun.shadow.mapSize.width = 2048;
-      sun.shadow.mapSize.height = 2048;
-      sun.shadow.camera.near = 0.5;
-      sun.shadow.camera.far = 150;
-      sun.shadow.camera.left = -25;
-      sun.shadow.camera.right = 25;
-      sun.shadow.camera.top = 25;
-      sun.shadow.camera.bottom = -25;
-      sun.shadow.bias = -0.0005;
-      threeScene.add(sun);
-
-      const grid = new THREE.GridHelper(50, 50, 0x30363d, 0x161b22);
-      grid.position.y = -0.09;
-      threeScene.add(grid);
+      if (typeof THREE.OrbitControls !== 'undefined') {
+        try {
+          threeControls = new THREE.OrbitControls(threeCamera, canvas);
+          threeControls.enableDamping = true;
+          threeControls.dampingFactor = 0.05;
+          threeControls.maxPolarAngle = Math.PI / 2 - 0.02;
+        } catch (e) {
+          console.warn('Erro ao instanciar OrbitControls:', e);
+          threeControls = null;
+        }
+      }
 
       window.addEventListener('resize', onWindowResize);
+      startAnimationLoop();
+      return true;
+    }
+
+    function startAnimationLoop() {
+      if (animFrameId) return;
 
       function animate() {
-        requestAnimationFrame(animate);
-        threeControls.update();
-        threeRenderer.render(threeScene, threeCamera);
-        updateRoomBadges3d();
+        animFrameId = requestAnimationFrame(animate);
+        if (threeControls) {
+          threeControls.update();
+        }
+        if (threeRenderer && threeScene && threeCamera) {
+          threeRenderer.render(threeScene, threeCamera);
+        }
+        if (threeCamera && threeRenderer) {
+          updateRoomBadges3d();
+        }
       }
       animate();
     }
 
     function onWindowResize() {
-      if (!threeRenderer) return;
       const container = document.getElementById('threeViewport');
+      if (!container) return;
       const w = container.clientWidth || 800;
       const h = container.clientHeight || 600;
-      threeCamera.aspect = w / h;
-      threeCamera.updateProjectionMatrix();
-      threeRenderer.setSize(w, h);
+
+      if (threeCamera) {
+        threeCamera.aspect = w / h;
+        threeCamera.updateProjectionMatrix();
+      }
+      if (threeRenderer) {
+        threeRenderer.setSize(w, h);
+      }
+      if (is2dFallbackMode && currentFloorplanData) {
+        render2dFloorplanFallback(currentFloorplanData, currentCutHeight);
+      }
+    }
+
+    function render2dFloorplanFallback(floorplan, cutHeight = 1.30) {
+      let canvas = document.getElementById('threeCanvas');
+      if (!canvas) return;
+
+      const container = document.getElementById('threeViewport');
+      const w = container ? container.clientWidth || 800 : 800;
+      const h = container ? container.clientHeight || 600 : 600;
+      canvas.width = w;
+      canvas.height = h;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Fundo blueprint escuro
+      ctx.fillStyle = '#0b0f17';
+      ctx.fillRect(0, 0, w, h);
+
+      if (!floorplan || !floorplan.corners) return;
+
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const id in floorplan.corners) {
+        const c = floorplan.corners[id];
+        if (c.x < minX) minX = c.x;
+        if (c.x > maxX) maxX = c.x;
+        if (c.y < minY) minY = c.y;
+        if (c.y > maxY) maxY = c.y;
+      }
+      if (!isFinite(minX)) return;
+
+      const fpW = (maxX - minX) || 1;
+      const fpH = (maxY - minY) || 1;
+      const pad = 60;
+      const scale = Math.min((w - pad * 2) / fpW, (h - pad * 2) / fpH);
+
+      const toScreenX = (x) => pad + (x - minX) * scale + ((w - pad * 2) - fpW * scale) / 2;
+      const toScreenY = (y) => pad + (y - minY) * scale + ((h - pad * 2) - fpH * scale) / 2;
+
+      // Grade milimetrada de fundo
+      ctx.strokeStyle = '#161b22';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < w; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+      for (let y = 0; y < h; y += 40) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+
+      // Base / Fundação
+      ctx.fillStyle = '#161b22';
+      ctx.strokeStyle = '#30363d';
+      ctx.lineWidth = 2;
+      const basePad = 20;
+      const bx = toScreenX(minX) - basePad;
+      const by = toScreenY(minY) - basePad;
+      const bw = fpW * scale + basePad * 2;
+      const bh = fpH * scale + basePad * 2;
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.strokeRect(bx, by, bw, bh);
+
+      // 1. Cômodos
+      if (floorplan.rooms) {
+        floorplan.rooms.forEach((r, idx) => {
+          if (!r.polygon || r.polygon.length < 3) return;
+          ctx.beginPath();
+          ctx.moveTo(toScreenX(r.polygon[0].x), toScreenY(r.polygon[0].y));
+          for (let i = 1; i < r.polygon.length; i++) {
+            ctx.lineTo(toScreenX(r.polygon[i].x), toScreenY(r.polygon[i].y));
+          }
+          ctx.closePath();
+
+          const name = (r.name || '').toLowerCase();
+          let fill = 'rgba(56, 139, 253, 0.12)';
+          if (/wc|banh/i.test(name)) fill = 'rgba(78, 201, 176, 0.15)';
+          else if (/dorm|su[ií]te|quarto/i.test(name)) fill = 'rgba(163, 113, 247, 0.15)';
+          else if (/cozinh|servi/i.test(name)) fill = 'rgba(210, 153, 34, 0.15)';
+          else if (/varanda|terra/i.test(name)) fill = 'rgba(63, 185, 80, 0.15)';
+
+          ctx.fillStyle = fill;
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(88, 166, 255, 0.25)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          // Labels
+          let cx = 0, cy = 0;
+          r.polygon.forEach(p => { cx += p.x; cy += p.y; });
+          cx = toScreenX(cx / r.polygon.length);
+          cy = toScreenY(cy / r.polygon.length);
+
+          ctx.fillStyle = '#f0f6fc';
+          ctx.font = '600 12px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(r.name || `Cômodo ${idx + 1}`, cx, cy - 3);
+
+          if (r.area) {
+            ctx.fillStyle = '#58a6ff';
+            ctx.font = '500 11px Inter, sans-serif';
+            ctx.fillText(`${r.area.toFixed(1)} m²`, cx, cy + 13);
+          }
+        });
+      }
+
+      // 2. Paredes
+      if (floorplan.walls) {
+        floorplan.walls.forEach(w => {
+          const c1 = floorplan.corners[w.corner1];
+          const c2 = floorplan.corners[w.corner2];
+          if (!c1 || !c2) return;
+
+          const x1 = toScreenX(c1.x), y1 = toScreenY(c1.y);
+          const x2 = toScreenX(c2.x), y2 = toScreenY(c2.y);
+
+          if (w.isDoorwayThreshold) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+            ctx.setLineDash([]);
+            return;
+          }
+
+          const wallWidth = Math.max(3, (w.thickness || 0.15) * scale);
+          ctx.strokeStyle = '#f0f6fc';
+          ctx.lineWidth = wallWidth;
+          ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        });
+      }
     }
 
     function build3dScene(floorplan, cutHeight = 1.30) {
-      if (!threeScene || !floorplan) return;
+      if (!floorplan) return;
+
+      if (!threeRenderer || is2dFallbackMode) {
+        render2dFloorplanFallback(floorplan, cutHeight);
+        return;
+      }
+      if (!threeScene) return;
 
       if (house3dGroup) {
         threeScene.remove(house3dGroup);
@@ -2054,12 +2291,16 @@
         initThree();
         build3dScene(currentFloorplanData, currentCutHeight);
 
-        threeControls.target.set(0, 0.8, 0);
-        threeCamera.position.set(18, 20, 20);
-        threeControls.update();
+        if (threeControls) {
+          threeControls.target.set(0, 0.8, 0);
+          threeControls.update();
+        }
+        if (threeCamera) {
+          threeCamera.position.set(18, 20, 20);
+        }
 
       } catch (err) {
-        showToast(err.message);
+        showToast(err.message || 'Erro ao processar maquete');
         if (emptyState3d && !currentFloorplanData) emptyState3d.style.display = 'flex';
       } finally {
         generate3dBtn.disabled = false;
@@ -2077,6 +2318,10 @@
     });
     document.getElementById('emptyLoadSampleBtn').addEventListener('click', () => {
       generateFloorplan3D({ isSample: true });
+    });
+    document.getElementById('retryWebglBtn')?.addEventListener('click', () => {
+      initThree(true);
+      if (currentFloorplanData) build3dScene(currentFloorplanData, currentCutHeight);
     });
 
     cutHeightRange.addEventListener('input', (e) => {
