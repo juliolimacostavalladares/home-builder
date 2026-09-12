@@ -4,7 +4,8 @@
   "description": "API Node.js para conversão de DWG/DXF em imagens 2D (SVG e PNG) e visualizador de planta",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test/test-3d.js"
   },
   "keywords": [
     "cad",
@@ -23,6 +24,7 @@
     "express": "^4.21.2",
     "multer": "^1.4.5-lts.1",
     "nasjidwg": "^0.18.0",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "three": "^0.186.0"
   }
 }

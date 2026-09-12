@@ -58,7 +58,7 @@ class FloorPlanHumanizer {
     // Tenta conectar ao 9Router ativo
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout
 
       const baseUrl = this.nineRouterUrl.replace(/\/+$/, '').replace(/\/v1$/, '');
       const endpoint = `${baseUrl}/v1/chat/completions`;
