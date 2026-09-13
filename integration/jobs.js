@@ -8,7 +8,7 @@ module.exports = function mountJobs(app, receiveFile, { pipeline = runPipeline, 
   let active = 0;
   const snapshot = job => {
     const artifacts = {};
-    for (const name of ['conversion-contract.json', 'conversion-map.json', 'source.svg', 'source.png', 'source.dxf', 'layers.svg', 'inventory.json', 'semantic.svg', 'semantic-map.json', 'interpretation-1.json', 'interpretation-2.json', 'report.json', 'design.blueprint3d']) {
+    for (const name of ['conversion-contract.json', 'conversion-map.json', 'source.svg', 'source.png', 'source.dxf', 'layers.svg', 'inventory.json', 'layer-filter.json', 'semantic.svg', 'semantic-map.json', 'interpretation-1.json', 'interpretation-2.json', 'report.json', 'design.blueprint3d']) {
       if (fs.existsSync(path.join(root, job.id, name))) artifacts[name] = `/outputs/${job.id}/${name}`;
     }
     return { ...job, artifacts };
