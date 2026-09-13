@@ -7,7 +7,7 @@ module.exports = function mountBlueprint(app, upload) {
   // The shipped application remains upstream; only the input bridge is injected.
   app.get(['/blueprint3d/', '/blueprint3d/index.html'], (req, res) => {
     res.type('html').send(fs.readFileSync(path.join(example, 'index.html'), 'utf8')
-      .replace('<script src="js/example.js"></script>', '<script src="/native-cad-properties.js"></script><script src="/blueprint-bridge.js"></script>\n    <script src="js/example.js"></script>'));
+      .replace('<script src="js/example.js"></script>', '<script src="/native-cad-properties.js"></script><script src="/blueprint-bridge.js"></script>\n    <script src="js/example.js"></script>\n    <script src="/first-person.js"></script>'));
   });
   app.use('/blueprint3d', express.static(example));
   const receiveFile = (req, res, next) => upload.single('file')(req, res, error => {

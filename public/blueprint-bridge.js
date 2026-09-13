@@ -4,6 +4,7 @@
   const Original = BP3D.Blueprint3d;
   BP3D.Blueprint3d = function(options) {
     instance = new Original(options);
+    window._bp3dInstance = instance; // exposto para first-person.js
     installNativeCadProperties(instance.model);
     BP3D.Core.Configuration.setValue(BP3D.Core.configDimUnit, BP3D.Core.dimCentiMeter);
     return instance;
