@@ -2,7 +2,7 @@
   const $ = id => document.getElementById(id);
   let file, busy = false, artifacts = {}, inventory, roles = new Map(), map, modelReady = false, workspace = 'cad';
   function status(message, state = '') { $('status').textContent = message; $('status').setAttribute('data-state', state); }
-  function controls() { $('import').disabled = busy || !file; $('sample').disabled = busy; $('cad-file').disabled = busy; }
+  function controls() { $('import').disabled = busy || !file; $('extract-2d').disabled = busy || !file; $('sample').disabled = busy; $('cad-file').disabled = busy; }
   function showWorkspace(view) {
     if (view !== 'cad' && !modelReady) return;
     workspace = view;
@@ -99,34 +99,53 @@
       }
       await review(job);
       if (job.status !== 'ready') throw new Error([job.error, ...(job.diagnostics || [])].join(' '));
-      const bridge = $('editor').contentWindow.homeBuilderBridge;
-      if (!bridge?.ready) throw new Error('O editor não iniciou. O arquivo validado está disponível nos artefatos.');
-      $('editor').hidden = false;
-      const result = bridge.load(job.result.design);
-      modelReady = true;
-      $('view-plan').disabled = false; $('view-model').disabled = false;
-      $('download').disabled = false;
-      $('model-status').textContent = `${job.filename}: planta e modelo 3D disponíveis.`;
-      showWorkspace('2d');
-      $('editor-result').textContent = `${result.walls} paredes · ${result.rooms} pisos fechados`;
-      $('warnings').replaceChildren();
-      const warnings = job.result.report.warnings || [];
-      if (warnings.length > 0) {
-        const summary = document.createElement('summary'); summary.textContent = 'Relatório da adaptação'; $('warnings').append(summary);
-        for (const warning of warnings) { const p = document.createElement('p'); p.textContent = warning; $('warnings').append(p); }
+      if (job.result?.design) {
+        const bridge = $('editor').contentWindow.homeBuilderBridge;
+        if (!bridge?.ready) throw new Error('O editor não iniciou. O arquivo validado está disponível nos artefatos.');
+        $('editor').hidden = false;
+        const result = bridge.load(job.result.design);
+        modelReady = true;
+        $('view-plan').disabled = false; $('view-model').disabled = false;
+        $('download').disabled = false;
+        $('model-status').textContent = `${job.filename}: planta e modelo 3D disponíveis.`;
+        showWorkspace('2d');
+        $('editor-result').textContent = `${result.walls} paredes · ${result.rooms} pisos fechados`;
+        $('warnings').replaceChildren();
+        const warnings = job.result.report?.warnings || [];
+        if (warnings.length > 0) {
+          const summary = document.createElement('summary'); summary.textContent = 'Relatório da adaptação'; $('warnings').append(summary);
+          for (const warning of warnings) { const p = document.createElement('p'); p.textContent = warning; $('warnings').append(p); }
+        }
+        status(job.result.report?.strategy === 'ai-native' ? `${job.filename}: modelo produzido pela IA no contrato ${job.result.report.contractVersion}, validado e importado.` : `${job.filename}: modelo Blueprint3D gerado com sucesso a partir das camadas arquitetônicas (${job.result.report?.walls} paredes).`);
+      } else {
+        // Modo 2D exclusivo (sem IA e sem 3D)
+        modelReady = false;
+        $('view-plan').disabled = true; $('view-model').disabled = true;
+        $('download').disabled = true;
+        $('model-status').textContent = `${job.filename}: desenho 2D vetorial detalhado pronto.`;
+        showWorkspace('cad');
+        $('editor-result').textContent = `${job.result?.report?.instancesCount || ''} entidades CAD`;
+        status(`${job.filename}: planta 2D técnica extraída com fidelidade total (sem IA).`);
       }
-      status(job.result.report.strategy === 'ai-native' ? `${job.filename}: modelo produzido pela IA no contrato ${job.result.report.contractVersion}, validado e importado.` : `${job.filename}: modelo Blueprint3D gerado com sucesso a partir das camadas arquitetônicas (${job.result.report.walls} paredes).`);
   }
-  $('import-form').addEventListener('submit', async event => {
-    event.preventDefault(); if (busy || !file) return;
-    busy = true; controls(); resetResult(); $('stages').replaceChildren(); status('Enviando CAD para interpretação…');
+  async function submitJob(mode = 'full') {
+    if (busy || !file) return;
+    busy = true; controls(); resetResult(); $('stages').replaceChildren();
+    status(mode === '2d' ? 'Extraindo planta técnica 2D do CAD (sem IA)…' : 'Enviando CAD para interpretação…');
     try {
       const body = new FormData(); body.append('file', file);
-      const response = await fetch('/api/blueprint3d/jobs', { method: 'POST', body });
+      const response = await fetch(`/api/blueprint3d/jobs?mode=${mode}`, { method: 'POST', body });
       let job = await response.json(); if (!response.ok) throw new Error(job.error);
       history.replaceState(null, '', '?job=' + encodeURIComponent(job.id));
       await followJob(job);
     } catch (error) { failed(error); } finally { busy = false; controls(); }
+  }
+  $('import-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    await submitJob('full');
+  });
+  $('extract-2d').addEventListener('click', async () => {
+    await submitJob('2d');
   });
   const resumeId = new URLSearchParams(location.search).get('job');
   if (!resumeId) fetch('/api/blueprint3d/recent').then(response=>response.json()).then(jobs=>{

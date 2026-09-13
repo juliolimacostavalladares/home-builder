@@ -7,7 +7,7 @@ const {interpretCad}=require('./ai-interpreter');
 const {runtimeContract,validateAiNative}=require('./ai-native-contract');
 const {validateNative}=require('./validate-native');
 const {renderSemanticSvg}=require('./semantic-svg');
-async function runPipeline(filePath,config,{directory,onStage=()=>{},interpret=interpretCad,initialFeedback}={}){
+async function runPipeline(filePath,config,{directory,onStage=()=>{},interpret=interpretCad,initialFeedback,mode='full'}={}){
   const stage=(name,message)=>onStage({name,message,time:new Date().toISOString()});
   const write=(name,body)=>fs.writeFileSync(path.join(directory,name),typeof body==='string'||Buffer.isBuffer(body)?body:JSON.stringify(body,null,2));
   stage('extract','Lendo o CAD e preservando as entidades técnicas.');
@@ -21,26 +21,59 @@ async function runPipeline(filePath,config,{directory,onStage=()=>{},interpret=i
   const rawData=inventory(dxf);write('inventory.json',rawData);write('conversion-contract.json',runtimeContract());
   
   stage('filter','Filtrando camadas com IA para isolar a arquitetura da planta baixa (removendo telhado, encanamento, elétrica e cotas).');
-  const { filterArchitecturalLayers } = require('./filter-architectural-layers');
+  const { filterArchitecturalLayers, heuristicFilter } = require('./filter-architectural-layers');
   let layerFilter;
   let data = rawData;
-  try {
-    layerFilter = await filterArchitecturalLayers(rawData.source.entities, rawData.source.blocks, config, { onProgress: msg => stage('filter', msg) });
-    write('layer-filter.json', layerFilter);
-    if (layerFilter.include?.length > 0 && layerFilter.exclude?.length > 0) {
-      const inc = new Set(layerFilter.include);
-      const filteredInstances = rawData.instances.filter(i => inc.has(i.layer));
-      if (filteredInstances.length > 0) {
-        data = { ...rawData, instances: filteredInstances, filteredLayers: layerFilter };
-        write('filtered-inventory.json', data);
-      }
+  if (mode === '2d') {
+    // No modo 2D direto sem IA: filtro puramente heurístico rápido
+    const layerMap = new Map();
+    for (const entity of rawData.source.entities || []) {
+      const name = entity.layer || '0';
+      if (!layerMap.has(name)) layerMap.set(name, { name, count: 0, types: new Set(), samples: new Set() });
+      const item = layerMap.get(name); item.count++;
+      if (entity.type) item.types.add(entity.type);
+      if (entity.name) item.samples.add(entity.name);
+      if (entity.text && entity.text.trim().length > 1) item.samples.add(entity.text.trim().slice(0, 30));
     }
-  } catch (filterError) {
-    console.warn('Filtro de camadas falhou, prosseguindo com dados completos:', filterError.message);
+    const layers = Array.from(layerMap.values()).map(l => ({ ...l, types: Array.from(l.types), samples: Array.from(l.samples).slice(0, 5) }));
+    layerFilter = heuristicFilter(layers);
+    write('layer-filter.json', layerFilter);
+  } else {
+    try {
+      layerFilter = await filterArchitecturalLayers(rawData.source.entities, rawData.source.blocks, config, { onProgress: msg => stage('filter', msg) });
+      write('layer-filter.json', layerFilter);
+    } catch (filterError) {
+      console.warn('Filtro de camadas falhou, prosseguindo com dados completos:', filterError.message);
+    }
+  }
+
+  if (layerFilter?.include?.length > 0 && layerFilter?.exclude?.length > 0) {
+    const inc = new Set(layerFilter.include);
+    const filteredInstances = rawData.instances.filter(i => inc.has(i.layer));
+    if (filteredInstances.length > 0) {
+      data = { ...rawData, instances: filteredInstances, filteredLayers: layerFilter };
+      write('filtered-inventory.json', data);
+    }
   }
 
   const layerView=renderSemanticSvg(data);write('layers.svg',layerView.svg);
   const layerImage=await sharp(Buffer.from(layerView.svg)).resize({width:1600}).png().toBuffer();write('layers.png',layerImage);
+
+  if (mode === '2d') {
+    stage('ready', 'Planta 2D detalhada gerada diretamente do CAD com fidelidade total (sem IA).');
+    const result2d = {
+      mode: '2d',
+      report: {
+        strategy: 'technical-2d',
+        contractVersion: '2.0.0',
+        instancesCount: data.instances.length,
+        layersCount: Object.keys(rawData.source.layers || {}).length,
+        warnings: []
+      }
+    };
+    write('report.json', result2d);
+    return result2d;
+  }
   let feedback=initialFeedback,accepted;
   for(let attempt=1;attempt<=2;attempt++){
     stage('interpret',`IA convertendo o CAD completo para o contrato Blueprint3D (${attempt}/2).`);

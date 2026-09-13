@@ -50,12 +50,13 @@ module.exports = function mountJobs(app, receiveFile, { pipeline = runPipeline, 
     // Preserve the extension for DWG/DXF readers; never use the supplied filename as a path.
     const input = path.join(directory, 'input' + path.extname(req.file.originalname).toLowerCase());
     fs.renameSync(req.file.path, input);
-    const job = { id, status: 'running', stages: [], filename: req.file.originalname, createdAt: new Date().toISOString() };
+    const mode = (req.query.mode || req.body.mode || 'full').toLowerCase();
+    const job = { id, mode, status: 'running', stages: [], filename: req.file.originalname, createdAt: new Date().toISOString() };
     const persist = () => fs.writeFileSync(path.join(directory, 'job.json'), JSON.stringify(job));
     jobs.set(id, job); active++; persist();
     for (const [key, old] of jobs) if (jobs.size > 100 && old.status !== 'running') jobs.delete(key);
     res.status(202).json(snapshot(job));
-    Promise.resolve().then(() => pipeline(input, config(), { directory, onStage: stage => { job.stages.push(stage); persist(); } }))
+    Promise.resolve().then(() => pipeline(input, config(), { mode, directory, onStage: stage => { job.stages.push(stage); persist(); } }))
       .then(result => { job.result = result; job.status = 'ready'; })
       .catch(error => { job.status = 'failed'; job.error = error.message; job.diagnostics = error.diagnostics || []; })
       .finally(() => { persist(); active--; fs.rmSync(input, { force: true }); });
