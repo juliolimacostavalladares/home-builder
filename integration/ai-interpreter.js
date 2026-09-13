@@ -22,7 +22,7 @@ Responda SOMENTE um objeto JSON válido do contrato cad-blueprint3d/2, incluindo
 Pense semanticamente: um símbolo pode ter várias linhas, um bloco pode reunir elementos diferentes, e múltiplas representações do mesmo vão devem produzir um único objeto com todas as referências. Não se baseie em nomes fixos de arquivos, blocos, camadas ou quantidades de cômodos.
 Use os dados técnicos para valores e a imagem para contexto. Não invente layout, medidas ou alvenaria para fechar pisos. Explique cada transformação na proveniência e toda premissa de dado ausente. Preserve entidades sem equivalente, sem fingir que viraram geometria nativa. Se houver diagnóstico, revise sua própria resposta completa sem alterar a planta de origem.`;
 async function interpretCad(data,image,config,{feedback,onProgress,onResponse,layerImage,fetchImpl=fetch}={}){
-  const model=config.model||process.env.CAD_BLUEPRINT_MODEL||'ag/gemini-3.8-flash-high';
+  const model=config.model||process.env.CAD_BLUEPRINT_MODEL||'ag/claude-opus-4-6-thinking';
   const endpoint=config.url.replace(/\/+$/,'').replace(/\/v1$/,'')+'/v1/chat/completions';
   const technical=JSON.stringify(transportInventory(data));
   const maxInventoryBytes=process.env.CAD_MAX_INVENTORY_BYTES?Number(process.env.CAD_MAX_INVENTORY_BYTES):5000000;

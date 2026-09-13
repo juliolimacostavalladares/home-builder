@@ -77,7 +77,7 @@ async function filterArchitecturalLayers(sourceEntities, blocks = {}, config = {
     try {
       onProgress?.('IA analisando camadas para filtrar telhado, encanamento, elétrica e cortes...');
       const endpoint = config.url.replace(/\/+$/, '').replace(/\/v1$/, '') + '/v1/chat/completions';
-      const model = config.model || process.env.CAD_BLUEPRINT_MODEL || 'ag/gemini-3.8-flash-high';
+      const model = config.model || process.env.CAD_BLUEPRINT_MODEL || 'ag/claude-opus-4-6-thinking';
 
       const prompt = `Você é um arquiteto especialista em projetos CAD. Analise as camadas abaixo de um arquivo DWG/DXF e retorne SOMENTE um JSON válido com duas listas:
 "include": lista de camadas essenciais da planta baixa (paredes, alvenaria, portas, janelas/esquadrias da planta, vãos, pisos e nomes de ambientes).

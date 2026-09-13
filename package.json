@@ -21,6 +21,7 @@
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "dxf-parser": "^1.1.2",
     "express": "^4.21.2",
     "multer": "^1.4.5-lts.1",
