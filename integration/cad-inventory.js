@@ -67,6 +67,7 @@ function inventory(dxf){
 }
 const ROLES=new Set(Object.keys(require('./contracts/cad-blueprint3d-v2.json').categories));
 function roleFor(id,assignments){
+  if(!assignments)return null;
   while(id){if(assignments.has(id))return assignments.get(id);const slash=id.lastIndexOf('/');if(slash<0)break;id=id.slice(0,slash);}
   return null;
 }

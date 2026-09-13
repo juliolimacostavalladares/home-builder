@@ -3,10 +3,16 @@ const {responseDiagnostic,invalidJsonDiagnostic}=require('./ai-response-diagnost
 // The original entity appears once in source. Instances retain their world-space
 // data and an explicit reference, avoiding repeated block metadata in the prompt.
 function transportInventory(data){
-  return {...data,instances:data.instances.map(({entity,...instance})=>{
+  const { source, rawDxf, ...rest } = data;
+  return {...rest,instances:data.instances.map(({entity,...instance})=>{
     const indexes=instance.id.split('/b').map((part,i)=>Number(i?part:part.slice(1)));
-    let current=data.source.entities[indexes[0]],entityRef=`source.entities[${indexes[0]}]`;
-    for(const index of indexes.slice(1)){entityRef=`source.blocks[${JSON.stringify(current.name)}].entities[${index}]`;current=data.source.blocks[current.name].entities[index];}
+    let current=data.source?.entities?.[indexes[0]],entityRef=`source.entities[${indexes[0]}]`;
+    for(const index of indexes.slice(1)){
+      if(current&&data.source?.blocks?.[current.name]?.entities){
+        entityRef=`source.blocks[${JSON.stringify(current.name)}].entities[${index}]`;
+        current=data.source.blocks[current.name].entities[index];
+      }
+    }
     return {...instance,entityRef};
   })};
 }
@@ -19,7 +25,8 @@ async function interpretCad(data,image,config,{feedback,onProgress,onResponse,la
   const model=config.model||process.env.CAD_BLUEPRINT_MODEL||'ag/gemini-3.8-flash-high';
   const endpoint=config.url.replace(/\/+$/,'').replace(/\/v1$/,'')+'/v1/chat/completions';
   const technical=JSON.stringify(transportInventory(data));
-  if(Buffer.byteLength(technical)>1500000)throw new Error('Inventário excede 1,5 MB por análise. Nenhuma entidade foi omitida ou truncada.');
+  const maxInventoryBytes=process.env.CAD_MAX_INVENTORY_BYTES?Number(process.env.CAD_MAX_INVENTORY_BYTES):5000000;
+  if(Buffer.byteLength(technical)>maxInventoryBytes)throw new Error(`Inventário excede ${Math.round(maxInventoryBytes/1024/1024)} MB por análise. Nenhuma entidade foi omitida ou truncada.`);
   const timeout=Number(process.env.CAD_BLUEPRINT_TIMEOUT_MS)||360000;
   onProgress?.(`Interpretando ${data.instances.length} entidades com ${model}`);
   const user=[{type:'text',text:`Contrato de conversão e destino:\n${JSON.stringify(runtimeContract())}\nInventário técnico integral:\n${technical}${feedback?'\nA interpretação anterior foi rejeitada pelo validador. Corrija a conversão completa, sem alterar a planta. Diagnóstico: '+JSON.stringify(feedback):''}`}, {type:'image_url',image_url:{url:'data:image/png;base64,'+image.toString('base64')}}];

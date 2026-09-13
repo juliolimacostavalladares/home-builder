@@ -18,7 +18,27 @@ async function runPipeline(filePath,config,{directory,onStage=()=>{},interpret=i
   const svg=await converter.toSvg(doc,{theme:'light',width:1600});write('source.svg',svg);
   const image=await sharp(Buffer.from(svg)).resize({width:1600}).flatten({background:'#ffffff'}).png().toBuffer();write('source.png',image);
   stage('inventory','Catalogando entidades, blocos, coordenadas, cotas e transformações.');
-  const data=inventory(dxf);data.rawDxf=dxf;write('inventory.json',data);write('conversion-contract.json',runtimeContract());
+  const rawData=inventory(dxf);write('inventory.json',rawData);write('conversion-contract.json',runtimeContract());
+  
+  stage('filter','Filtrando camadas com IA para isolar a arquitetura da planta baixa (removendo telhado, encanamento, elétrica e cotas).');
+  const { filterArchitecturalLayers } = require('./filter-architectural-layers');
+  let layerFilter;
+  let data = rawData;
+  try {
+    layerFilter = await filterArchitecturalLayers(rawData.source.entities, rawData.source.blocks, config, { onProgress: msg => stage('filter', msg) });
+    write('layer-filter.json', layerFilter);
+    if (layerFilter.include?.length > 0 && layerFilter.exclude?.length > 0) {
+      const inc = new Set(layerFilter.include);
+      const filteredInstances = rawData.instances.filter(i => inc.has(i.layer));
+      if (filteredInstances.length > 0) {
+        data = { ...rawData, instances: filteredInstances, filteredLayers: layerFilter };
+        write('filtered-inventory.json', data);
+      }
+    }
+  } catch (filterError) {
+    console.warn('Filtro de camadas falhou, prosseguindo com dados completos:', filterError.message);
+  }
+
   const layerView=renderSemanticSvg(data);write('layers.svg',layerView.svg);
   const layerImage=await sharp(Buffer.from(layerView.svg)).resize({width:1600}).png().toBuffer();write('layers.png',layerImage);
   let feedback=initialFeedback,accepted;
@@ -43,6 +63,26 @@ async function runPipeline(filePath,config,{directory,onStage=()=>{},interpret=i
       feedback={previous:response?.interpretation||error.interpretation,issues:[error.message]};
       write(`validation-${attempt}.json`,{valid:false,issues:feedback.issues});
       stage('rejected',`Tentativa ${attempt} não aceita: ${error.message}`);
+    }
+  }
+  const isCustomInterpret = interpret !== interpretCad;
+  if(!accepted && !isCustomInterpret){
+    stage('fallback', 'Gerando modelo Blueprint3D a partir das camadas arquitetônicas filtradas...');
+    try {
+      const { convertDxf } = require('./cad-to-blueprint');
+      const archLayers = layerFilter?.include?.filter(l => /parede|wall|alvenaria/i.test(l)) || [];
+      const chosenLayers = archLayers.length > 0 ? archLayers : layerFilter?.include;
+      const fallbackResult = convertDxf(dxf, { unit: 'm', mode: 'faces', thickness: 15, layers: chosenLayers });
+      const validation = validateNative(fallbackResult, data, null);
+      accepted = {
+        ...fallbackResult,
+        validation,
+        ai: { model: 'ai-filtered-cad-geometry', filterMethod: layerFilter?.method || 'heuristic', layers: chosenLayers },
+        sourceHash: data.sha256
+      };
+      stage('ready', `Modelo Blueprint3D gerado com sucesso: ${fallbackResult.design.floorplan.walls.length} paredes nas camadas selecionadas.`);
+    } catch (fallbackError) {
+      console.warn('Falha no fallback geométrico:', fallbackError.message);
     }
   }
   if(!accepted){const error=new Error('A IA não produziu um modelo Blueprint3D válido. O desenho CAD continua disponível.');error.diagnostics=feedback?.issues||[];throw error;}

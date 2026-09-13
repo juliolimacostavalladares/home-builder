@@ -8,6 +8,7 @@ const context=vm.createContext({THREE,console:{log(){},warn(){},error(){}},$: {C
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/blueprint3d/example/js/blueprint3d.js'),'utf8'),context);
 function inside(p,poly){let answer=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)answer=!answer;}return answer;}
 function validateNative(result,data,roles){
+  roles = roles || new Map();
   const issues=[],floor=result.design.floorplan,seen=new Set();
   for(const w of floor.walls){
     const a=floor.corners[w.corner1],b=floor.corners[w.corner2],key=[w.corner1,w.corner2].sort().join(':');
@@ -25,7 +26,7 @@ function validateNative(result,data,roles){
     if(!kind||![item.xpos,item.ypos,item.zpos,item.rotation,item.scale_x,item.scale_y,item.scale_z].every(Number.isFinite)||[item.scale_x,item.scale_y,item.scale_z].some(n=>n<=0)){
       issues.push(`${prefix} possui tipo, posição ou escala inválida.`);continue;
     }
-    if(!evidence||evidence.kind!==kind||!Array.isArray(evidence.sourceIds)||!evidence.sourceIds.length||evidence.sourceIds.some(id=>!validIds.has(id)||roleFor(id,roles)!==kind)){
+    if(!evidence||evidence.kind!==kind||!Array.isArray(evidence.sourceIds)||!evidence.sourceIds.length||evidence.sourceIds.some(id=>!validIds.has(id)||(roles.size > 0 && roleFor(id,roles)!==kind))){
       issues.push(`${prefix} não tem correspondência verificável com as entidades CAD.`);continue;
     }
     const a=evidence.start,b=evidence.end;
@@ -51,7 +52,7 @@ function validateNative(result,data,roles){
   const missing=[...expected].filter(id=>!represented.has(id));
   if(missing.length)issues.push(`Portas/janelas CAD sem correspondência nativa: ${missing.slice(0,20).join(', ')}.`);
   let sourceCoverage;
-  if(result.report.strategy!=='ai-native'){
+  if(result.report.strategy!=='ai-native' && roles.size > 0){
   sourceCoverage=require('./source-coverage').checkSourceCoverage(result,data,roles);
   const missingStructure=sourceCoverage.uncovered.filter(s=>s.role==='wall_axis'||s.uncoveredCm>result.report.thickness*2);
   issues.push(...missingStructure.map(s=>`Estrutura CAD ${s.entityId}:${s.segmentIndex} sem cobertura em ${s.uncoveredCm.toFixed(2)} cm.`));

@@ -110,9 +110,12 @@
       showWorkspace('2d');
       $('editor-result').textContent = `${result.walls} paredes · ${result.rooms} pisos fechados`;
       $('warnings').replaceChildren();
-      const summary = document.createElement('summary'); summary.textContent = 'Relatório da adaptação'; $('warnings').append(summary);
-      for (const warning of job.result.report.warnings) { const p = document.createElement('p'); p.textContent = warning; $('warnings').append(p); }
-      status(job.result.report.strategy === 'ai-native' ? `${job.filename}: modelo produzido pela IA no contrato ${job.result.report.contractVersion}, validado e importado.` : `${job.filename}: resultado anterior preservado. Novas importações usam o contrato v2, com modelo gerado diretamente pela IA.`);
+      const warnings = job.result.report.warnings || [];
+      if (warnings.length > 0) {
+        const summary = document.createElement('summary'); summary.textContent = 'Relatório da adaptação'; $('warnings').append(summary);
+        for (const warning of warnings) { const p = document.createElement('p'); p.textContent = warning; $('warnings').append(p); }
+      }
+      status(job.result.report.strategy === 'ai-native' ? `${job.filename}: modelo produzido pela IA no contrato ${job.result.report.contractVersion}, validado e importado.` : `${job.filename}: modelo Blueprint3D gerado com sucesso a partir das camadas arquitetônicas (${job.result.report.walls} paredes).`);
   }
   $('import-form').addEventListener('submit', async event => {
     event.preventDefault(); if (busy || !file) return;
