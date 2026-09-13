@@ -1,161 +1,120 @@
 /**
  * First-Person Walk Mode com Física e Colisão — Blueprint3D
+ * Estratégia: patcha BP3D.Blueprint3d ANTES do example.js criar a instância.
+ * Como os scripts são carregados em ordem:
+ *   native-cad-properties.js → blueprint-bridge.js → example.js → first-person.js
+ * O first-person.js chega DEPOIS da instância já criada; usa window._bp3dInstance.
  *
  * Controles:
  *   W / ↑  → avançar     S / ↓  → recuar
- *   A / ←  → strafe esq  D / →  → strafe dir
+ *   A / ←  → esquerda    D / →  → direita
  *   Mouse  → olhar (pointer lock)
- *   ESC    → sair do modo walk
+ *   ESC    → sair
  *
  * Física:
- *   • Câmera fixada na altura dos olhos (sem gravidade simulada)
- *   • Colisão com cada segmento de parede (capsule radius)
- *   • Confinamento dentro do polígono da planta (union de rooms)
+ *   • Colisão com segmentos de parede (push-back iterativo)
+ *   • Confinamento dentro dos polígonos dos rooms (ray-cast)
+ *   • Câmera sempre a EYE_HEIGHT (sem queda)
  */
 (function installFirstPersonWalk() {
   'use strict';
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Constantes de física e câmera
-  // ═══════════════════════════════════════════════════════════════════════════
-  const EYE_HEIGHT    = 155;   // altura dos olhos em unidades BP3D (≈ cm)
-  const MOVE_SPEED    = 5.5;   // unidades por frame (~50 fps → ~275 u/s)
-  const LOOK_SENS     = 0.0022;
+  // ─── Constantes ──────────────────────────────────────────────────────────────
+  const EYE_HEIGHT    = 155;     // altura dos olhos (unidades BP3D ≈ cm)
+  const MOVE_SPEED    = 5.5;     // u/frame  (~50fps → ~275 u/s)
+  const LOOK_SENS     = 0.0022;  // rad/px
   const MIN_PITCH     = -Math.PI * 0.38;
   const MAX_PITCH     =  Math.PI * 0.38;
-  const PLAYER_RADIUS = 25;    // raio da cápsula do jogador (cm)
-  const WALL_MARGIN   = PLAYER_RADIUS;
-  const FLOOR_MARGIN  = PLAYER_RADIUS * 0.6; // margem da borda exterior da planta
+  const PLAYER_RADIUS = 28;      // raio da cápsula (cm)
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Estado do walk
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── Estado ──────────────────────────────────────────────────────────────────
   let active   = false;
   let yaw      = 0;
   let pitch    = 0;
   const keys   = {};
 
-  // cache de geometria da planta (atualizado ao entrar no modo walk)
-  let wallSegments   = []; // [{x1,z1,x2,z2}]
-  let floorPolygons  = []; // [[[x,z],...]]  — uma por room
-  let planeBounds    = { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
+  let wallSegs      = [];  // [{x1,z1,x2,z2}]
+  let roomPolygons  = [];  // [[[x,z],...]]
 
-  // refs BP3D
-  let camera, controls, threeInstance, rafId;
+  // Refs vivas para a câmera e controls do BP3D
+  let _camera   = null;
+  let _controls = null;
+  let _three    = null;
+  let _floorplan = null;
+  let rafId;
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Geometria de colisão — extrai da planta BP3D
-  // ═══════════════════════════════════════════════════════════════════════════
-  function buildCollisionGeometry(floorplan) {
-    wallSegments  = [];
-    floorPolygons = [];
-
-    // ── Paredes ──────────────────────────────────────────────────────────────
-    const walls = floorplan.getWalls ? floorplan.getWalls() : [];
-    walls.forEach(wall => {
-      // Evitar paredes de contorno (cadFloorBoundary) — são apenas visuais
-      if (wall.cadFloorBoundary) return;
-
-      const sv = wall.startVertex || wall.start;
-      const ev = wall.endVertex   || wall.end;
-      if (!sv || !ev) return;
-
-      wallSegments.push({ x1: sv.x, z1: sv.y, x2: ev.x, z2: ev.y });
-    });
-
-    // ── Polígonos de rooms (chão) ─────────────────────────────────────────
-    const rooms = floorplan.getRooms ? floorplan.getRooms() : [];
-    let allX = [], allZ = [];
-
-    rooms.forEach(room => {
-      const corners = room.interiorCorners || [];
-      if (corners.length < 3) return;
-      const poly = corners.map(c => [c.x, c.y]);
-      floorPolygons.push(poly);
-      poly.forEach(([x, z]) => { allX.push(x); allZ.push(z); });
-    });
-
-    if (allX.length) {
-      planeBounds = {
-        minX: Math.min(...allX) - FLOOR_MARGIN,
-        maxX: Math.max(...allX) + FLOOR_MARGIN,
-        minZ: Math.min(...allZ) + FLOOR_MARGIN,
-        maxZ: Math.max(...allZ) - FLOOR_MARGIN,
-      };
-    }
-
-    console.log(`[HB Walk] Colisão: ${wallSegments.length} paredes, ${floorPolygons.length} ambientes`);
+  // ─── Resolução de refs ───────────────────────────────────────────────────────
+  function getRefs() {
+    // window._bp3dInstance é definido pelo blueprint-bridge.js
+    const inst = window._bp3dInstance;
+    if (!inst) return false;
+    _three    = inst.three;
+    _camera   = _three.getCamera();
+    _controls = _three.controls;
+    _floorplan = inst.model.floorplan;
+    return !!(_camera && _controls && _floorplan);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Física de colisão
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── Geometria de colisão ────────────────────────────────────────────────────
+  function buildGeometry() {
+    wallSegs     = [];
+    roomPolygons = [];
 
-  /** Ponto mais próximo no segmento AB a partir do ponto P */
-  function closestPointOnSegment(px, pz, ax, az, bx, bz) {
+    // Paredes
+    const walls = _floorplan.getWalls ? _floorplan.getWalls() : [];
+    for (const w of walls) {
+      if (w.cadFloorBoundary) continue;
+      const s = w.startVertex || w.start;
+      const e = w.endVertex   || w.end;
+      if (s && e) wallSegs.push({ x1: s.x, z1: s.y, x2: e.x, z2: e.y });
+    }
+
+    // Polígonos dos cômodos (para confinamento)
+    const rooms = _floorplan.getRooms ? _floorplan.getRooms() : [];
+    for (const r of rooms) {
+      const corners = r.interiorCorners || [];
+      if (corners.length >= 3) {
+        roomPolygons.push(corners.map(c => [c.x, c.y]));
+      }
+    }
+
+    console.log(`[Walk] ${wallSegs.length} paredes | ${roomPolygons.length} rooms`);
+  }
+
+  // ─── Algoritmos de colisão ───────────────────────────────────────────────────
+  function closestOnSeg(px, pz, ax, az, bx, bz) {
     const abx = bx - ax, abz = bz - az;
-    const apx = px - ax, apz = pz - az;
     const ab2 = abx * abx + abz * abz;
-    if (ab2 === 0) return { x: ax, z: az };
-    const t = Math.max(0, Math.min(1, (apx * abx + apz * abz) / ab2));
+    if (ab2 < 1e-9) return { x: ax, z: az };
+    const t = Math.max(0, Math.min(1, ((px - ax) * abx + (pz - az) * abz) / ab2));
     return { x: ax + t * abx, z: az + t * abz };
   }
 
-  /**
-   * Aplica push-back por colisão com paredes.
-   * Retorna {x, z} corrigido.
-   */
-  function resolveWallCollisions(nx, nz) {
-    // Iterar até 4 vezes para resolver colisões compostas (cantos)
-    for (let iter = 0; iter < 4; iter++) {
-      let pushed = false;
-
-      for (const seg of wallSegments) {
-        const cp = closestPointOnSegment(nx, nz, seg.x1, seg.z1, seg.x2, seg.z2);
-        const dx = nx - cp.x;
-        const dz = nz - cp.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-
-        if (dist < WALL_MARGIN && dist > 0.001) {
-          // Empurrar para fora da parede
-          const penetration = WALL_MARGIN - dist;
-          const nx2 = dx / dist;
-          const nz2 = dz / dist;
-          nx += nx2 * penetration;
-          nz += nz2 * penetration;
-          pushed = true;
+  function pushBackWalls(nx, nz) {
+    for (let iter = 0; iter < 5; iter++) {
+      let moved = false;
+      for (const seg of wallSegs) {
+        const cp  = closestOnSeg(nx, nz, seg.x1, seg.z1, seg.x2, seg.z2);
+        const dx  = nx - cp.x, dz = nz - cp.z;
+        const d   = Math.sqrt(dx * dx + dz * dz);
+        if (d < PLAYER_RADIUS && d > 1e-4) {
+          const pen = PLAYER_RADIUS - d;
+          nx += (dx / d) * pen;
+          nz += (dz / d) * pen;
+          moved = true;
         }
       }
-
-      if (!pushed) break;
+      if (!moved) break;
     }
     return { x: nx, z: nz };
   }
 
-  /**
-   * Verifica se ponto (px, pz) está dentro de algum polígono de room.
-   * Ray-casting algorithm.
-   */
-  function isInsideFloorPlan(px, pz) {
-    if (floorPolygons.length === 0) {
-      // Sem rooms: usar bounding box como fallback
-      return px >= planeBounds.minX && px <= planeBounds.maxX
-          && pz >= planeBounds.minZ && pz <= planeBounds.maxZ;
-    }
-
-    for (const poly of floorPolygons) {
-      if (pointInPolygon(px, pz, poly)) return true;
-    }
-    return false;
-  }
-
-  function pointInPolygon(px, pz, poly) {
+  function pointInPoly(px, pz, poly) {
     let inside = false;
     const n = poly.length;
     for (let i = 0, j = n - 1; i < n; j = i++) {
-      const [xi, zi] = poly[i];
-      const [xj, zj] = poly[j];
-      if (((zi > pz) !== (zj > pz)) &&
+      const [xi, zi] = poly[i], [xj, zj] = poly[j];
+      if ((zi > pz) !== (zj > pz) &&
           px < (xj - xi) * (pz - zi) / (zj - zi) + xi) {
         inside = !inside;
       }
@@ -163,154 +122,124 @@
     return inside;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Loop de jogo
-  // ═══════════════════════════════════════════════════════════════════════════
-  let lastPos = { x: 0, z: 0 }; // última posição válida
+  function isInsidePlan(px, pz) {
+    if (roomPolygons.length === 0) return true; // sem rooms: sem restrição
+    for (const poly of roomPolygons) {
+      if (pointInPoly(px, pz, poly)) return true;
+    }
+    return false;
+  }
 
+  // ─── Loop de física ──────────────────────────────────────────────────────────
   function loop() {
     if (!active) return;
     rafId = requestAnimationFrame(loop);
 
-    const sinY = Math.sin(yaw);
-    const cosY = Math.cos(yaw);
-
+    const sinY = Math.sin(yaw), cosY = Math.cos(yaw);
     let dx = 0, dz = 0;
 
-    if (keys['KeyW']    || keys['ArrowUp'])    { dx +=  sinY; dz +=  cosY; }
-    if (keys['KeyS']    || keys['ArrowDown'])  { dx -=  sinY; dz -=  cosY; }
-    if (keys['KeyA']    || keys['ArrowLeft'])  { dx -=  cosY; dz +=  sinY; }
-    if (keys['KeyD']    || keys['ArrowRight']) { dx +=  cosY; dz -=  sinY; }
+    if (keys['KeyW'] || keys['ArrowUp'])    { dx +=  sinY; dz +=  cosY; }
+    if (keys['KeyS'] || keys['ArrowDown'])  { dx -=  sinY; dz -=  cosY; }
+    if (keys['KeyA'] || keys['ArrowLeft'])  { dx -=  cosY; dz +=  sinY; }
+    if (keys['KeyD'] || keys['ArrowRight']) { dx +=  cosY; dz -=  sinY; }
 
     if (dx !== 0 || dz !== 0) {
       const len = Math.sqrt(dx * dx + dz * dz);
-      let nx = camera.position.x + (dx / len) * MOVE_SPEED;
-      let nz = camera.position.z + (dz / len) * MOVE_SPEED;
+      let nx = _camera.position.x + (dx / len) * MOVE_SPEED;
+      let nz = _camera.position.z + (dz / len) * MOVE_SPEED;
 
-      // 1. Resolver colisão com paredes
-      const resolved = resolveWallCollisions(nx, nz);
-      nx = resolved.x;
-      nz = resolved.z;
+      // 1. push-back de paredes
+      const resolved = pushBackWalls(nx, nz);
+      nx = resolved.x; nz = resolved.z;
 
-      // 2. Confinamento à planta
-      if (isInsideFloorPlan(nx, nz)) {
-        camera.position.x = nx;
-        camera.position.z = nz;
-        lastPos = { x: nx, z: nz };
+      // 2. confinamento ao polígono da planta
+      if (isInsidePlan(nx, nz)) {
+        _camera.position.x = nx;
+        _camera.position.z = nz;
       } else {
-        // Tentar mover só em X
-        const onlyX = resolveWallCollisions(nx, camera.position.z);
-        if (isInsideFloorPlan(onlyX.x, camera.position.z)) {
-          camera.position.x = onlyX.x;
-          lastPos = { x: onlyX.x, z: camera.position.z };
+        // tentar deslizar em X
+        const rx = pushBackWalls(nx, _camera.position.z);
+        if (isInsidePlan(rx.x, rx.z)) {
+          _camera.position.x = rx.x;
+          _camera.position.z = rx.z;
         } else {
-          // Tentar mover só em Z
-          const onlyZ = resolveWallCollisions(camera.position.x, nz);
-          if (isInsideFloorPlan(camera.position.x, onlyZ.z)) {
-            camera.position.z = onlyZ.z;
-            lastPos = { x: camera.position.x, z: onlyZ.z };
+          // tentar deslizar em Z
+          const rz = pushBackWalls(_camera.position.x, nz);
+          if (isInsidePlan(rz.x, rz.z)) {
+            _camera.position.x = rz.x;
+            _camera.position.z = rz.z;
           }
-          // Senão: parado (bloqueado pelo canto)
+          // senão: parado
         }
       }
     }
 
-    // Câmera sempre na altura dos olhos (sem queda)
-    camera.position.y = EYE_HEIGHT;
+    // Altura travada
+    _camera.position.y = EYE_HEIGHT;
 
-    // Olhar
-    const lookX = camera.position.x + Math.sin(yaw)  * Math.cos(pitch);
-    const lookY = camera.position.y + Math.sin(pitch);
-    const lookZ = camera.position.z + Math.cos(yaw)  * Math.cos(pitch);
-    camera.lookAt(new THREE.Vector3(lookX, lookY, lookZ));
-    camera.updateProjectionMatrix();
+    // Direção do olhar
+    _camera.lookAt(new THREE.Vector3(
+      _camera.position.x + Math.sin(yaw)  * Math.cos(pitch),
+      _camera.position.y + Math.sin(pitch),
+      _camera.position.z + Math.cos(yaw)  * Math.cos(pitch)
+    ));
 
-    controls.needsUpdate = true;
+    // Forçar re-render do BP3D
+    _controls.needsUpdate = true;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // UI — botão Walk + crosshair + hint
-  // ═══════════════════════════════════════════════════════════════════════════
-  function injectWalkButton() {
-    if (document.getElementById('hb-walk-btn')) return;
-    const cameraControls = document.getElementById('camera-controls');
-    if (!cameraControls) return;
-
-    const btn = document.createElement('a');
-    btn.id        = 'hb-walk-btn';
-    btn.href      = '#';
-    btn.className = 'btn btn-default bottom';
-    btn.title     = 'Modo Primeira Pessoa · W A S D · Mouse';
-    btn.style.cssText = 'margin-left:10px; font-size:16px;';
-    btn.innerHTML = '🚶';
-    btn.addEventListener('click', e => { e.preventDefault(); toggleWalk(); });
-    cameraControls.appendChild(btn);
-
-    // Crosshair
-    const ch = document.createElement('div');
-    ch.id = 'hb-crosshair';
-    ch.style.cssText = `
-      display:none; position:fixed; top:50%; left:50%;
-      transform:translate(-50%,-50%); pointer-events:none; z-index:9999;
-      width:22px; height:22px;`;
-    ch.innerHTML = `<svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
-      <line x1="11" y1="3"  x2="11" y2="19" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-      <line x1="3"  y1="11" x2="19" y2="11" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-      <circle cx="11" cy="11" r="2.5" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-    </svg>`;
-    document.body.appendChild(ch);
-
-    // Hint bar
-    const hint = document.createElement('div');
-    hint.id = 'hb-walk-hint';
-    hint.style.cssText = `
-      display:none; position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
-      background:rgba(0,0,0,.6); color:#fff; padding:6px 18px; border-radius:20px;
-      font:13px/1.5 system-ui,sans-serif; pointer-events:none; z-index:9999;`;
-    hint.innerHTML = 'W A S D · Mouse para olhar · <kbd style="background:#333;border-radius:4px;padding:1px 5px">ESC</kbd> para sair';
-    document.body.appendChild(hint);
+  // ─── Pointer lock helpers ─────────────────────────────────────────────────────
+  function getCanvas() {
+    // O canvas do Three.js fica dentro do #viewer
+    return document.querySelector('#viewer canvas');
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Toggle Walk
-  // ═══════════════════════════════════════════════════════════════════════════
-  function toggleWalk() { active ? exitWalk() : enterWalk(); }
+  function requestLock() {
+    const el = getCanvas();
+    if (!el) return;
+    (el.requestPointerLock || el.mozRequestPointerLock || el.webkitRequestPointerLock
+      || (() => {})).call(el);
+  }
 
+  function releaseLock() {
+    (document.exitPointerLock || document.mozExitPointerLock
+      || document.webkitExitPointerLock || (() => {})).call(document);
+  }
+
+  function isLocked() {
+    const el = getCanvas();
+    return el && (document.pointerLockElement === el
+               || document.mozPointerLockElement === el
+               || document.webkitPointerLockElement === el);
+  }
+
+  // ─── Entrar / sair ───────────────────────────────────────────────────────────
   function enterWalk() {
-    if (!resolveRefs()) {
-      alert('O editor 3D ainda não está pronto. Acesse a aba "Design" primeiro.');
+    if (!getRefs()) {
+      alert('O viewer 3D ainda não está pronto. Acesse a aba "Design" primeiro.');
       return;
     }
 
     active = true;
+    buildGeometry();
 
-    // Construir geometria de colisão
-    buildCollisionGeometry(threeInstance.getModel().floorplan);
+    // Posicionar no centro da planta
+    const center = _floorplan.getCenter();
+    _camera.position.set(center.x, EYE_HEIGHT, center.z);
+    yaw = 0; pitch = 0;
 
-    // Posicionar jogador no centro da planta
-    const center = threeInstance.getModel().floorplan.getCenter();
-    camera.position.set(center.x, EYE_HEIGHT, center.z);
-    lastPos = { x: center.x, z: center.z };
-    yaw     = 0;
-    pitch   = 0;
+    // Desabilitar orbit controls
+    _controls.enabled = false;
+    _controls.noKeys  = true;
 
-    // Desabilitar OrbitControls
-    controls.enabled = false;
-    controls.noKeys  = true;
-
-    // Pointer lock
-    const canvas = document.querySelector('#viewer canvas');
-    if (canvas) {
-      (canvas.requestPointerLock || canvas.mozRequestPointerLock
-        || canvas.webkitRequestPointerLock || (() => {})).call(canvas);
-    }
+    requestLock();
 
     document.getElementById('hb-walk-btn').style.background = '#5bc0de';
     document.getElementById('hb-crosshair').style.display   = 'block';
     document.getElementById('hb-walk-hint').style.display   = 'block';
 
-    document.addEventListener('pointerlockchange',    onPointerLockChange, false);
-    document.addEventListener('mozpointerlockchange', onPointerLockChange, false);
+    document.addEventListener('pointerlockchange',    onLockChange, false);
+    document.addEventListener('mozpointerlockchange', onLockChange, false);
     document.addEventListener('mousemove', onMouseMove, false);
     document.addEventListener('keydown',   onKeyDown,   false);
     document.addEventListener('keyup',     onKeyUp,     false);
@@ -322,37 +251,32 @@
     if (!active) return;
     active = false;
     cancelAnimationFrame(rafId);
+    releaseLock();
 
-    const exitPL = document.exitPointerLock
-      || document.mozExitPointerLock
-      || document.webkitExitPointerLock;
-    exitPL && exitPL.call(document);
+    if (_controls) { _controls.enabled = true; _controls.noKeys = false; }
+    _three?.centerCamera();
 
-    if (controls) { controls.enabled = true; controls.noKeys = false; }
-    threeInstance?.centerCamera();
+    const btn = document.getElementById('hb-walk-btn');
+    if (btn) btn.style.background = '';
+    const ch = document.getElementById('hb-crosshair');
+    if (ch) ch.style.display = 'none';
+    const hint = document.getElementById('hb-walk-hint');
+    if (hint) hint.style.display = 'none';
 
-    document.getElementById('hb-walk-btn').style.background = '';
-    document.getElementById('hb-crosshair').style.display   = 'none';
-    document.getElementById('hb-walk-hint').style.display   = 'none';
-
-    document.removeEventListener('pointerlockchange',    onPointerLockChange, false);
-    document.removeEventListener('mozpointerlockchange', onPointerLockChange, false);
+    document.removeEventListener('pointerlockchange',    onLockChange, false);
+    document.removeEventListener('mozpointerlockchange', onLockChange, false);
     document.removeEventListener('mousemove', onMouseMove, false);
     document.removeEventListener('keydown',   onKeyDown,   false);
     document.removeEventListener('keyup',     onKeyUp,     false);
 
-    if (controls) controls.needsUpdate = true;
+    if (_controls) _controls.needsUpdate = true;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Eventos de input
-  // ═══════════════════════════════════════════════════════════════════════════
+  function toggleWalk() { active ? exitWalk() : enterWalk(); }
+
+  // ─── Handlers ────────────────────────────────────────────────────────────────
   function onMouseMove(e) {
-    if (!active) return;
-    const canvas = document.querySelector('#viewer canvas');
-    const locked = document.pointerLockElement === canvas
-                || document.mozPointerLockElement === canvas;
-    if (!locked) return;
+    if (!active || !isLocked()) return;
     yaw   -= (e.movementX || e.mozMovementX || 0) * LOOK_SENS;
     pitch -= (e.movementY || e.mozMovementY || 0) * LOOK_SENS;
     pitch  = Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
@@ -361,7 +285,7 @@
   function onKeyDown(e) {
     if (!active) return;
     keys[e.code] = true;
-    if (e.code === 'Escape') exitWalk();
+    if (e.code === 'Escape') { exitWalk(); return; }
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) {
       e.preventDefault();
     }
@@ -369,59 +293,101 @@
 
   function onKeyUp(e) { keys[e.code] = false; }
 
-  function onPointerLockChange() {
-    const canvas = document.querySelector('#viewer canvas');
-    const locked = document.pointerLockElement === canvas
-                || document.mozPointerLockElement === canvas;
-    if (!locked && active) exitWalk();
+  function onLockChange() {
+    // Se o pointer lock foi perdido externamente (ESC do browser), sair
+    if (!isLocked() && active) exitWalk();
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Resolver referências BP3D
-  // ═══════════════════════════════════════════════════════════════════════════
-  function resolveRefs() {
-    if (threeInstance && camera && controls) return true;
+  // ─── UI: botão, crosshair, hint ───────────────────────────────────────────────
+  function injectUI() {
+    if (document.getElementById('hb-walk-btn')) return;
 
-    // O blueprint-bridge.js guarda em window._bp3dInstance
-    const inst = window._bp3dInstance;
-    if (!inst || !inst.three) return false;
+    const cameraControls = document.getElementById('camera-controls');
+    if (!cameraControls) return; // viewer ainda não está visível
 
-    threeInstance = inst.three;
-    camera        = threeInstance.getCamera();
-    controls      = threeInstance.controls;
-    return !!(camera && controls);
+    // Botão
+    const btn = document.createElement('a');
+    btn.id        = 'hb-walk-btn';
+    btn.href      = '#';
+    btn.className = 'btn btn-default bottom';
+    btn.title     = 'Modo Primeira Pessoa  W A S D + Mouse';
+    btn.style.cssText = 'margin-left:10px;font-size:15px;line-height:1;';
+    btn.textContent = '🚶';
+    btn.addEventListener('click', e => { e.preventDefault(); toggleWalk(); });
+    cameraControls.appendChild(btn);
+
+    // Crosshair SVG
+    const ch = document.createElement('div');
+    ch.id = 'hb-crosshair';
+    ch.style.cssText = `
+      display:none; position:fixed; top:50%; left:50%;
+      transform:translate(-50%,-50%); pointer-events:none; z-index:9999;
+      width:24px; height:24px;`;
+    ch.innerHTML = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <line x1="12" y1="3"  x2="12" y2="21" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+      <line x1="3"  y1="12" x2="21" y2="12" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+      <circle cx="12" cy="12" r="2.5" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+    </svg>`;
+    document.body.appendChild(ch);
+
+    // Barra de hint
+    const hint = document.createElement('div');
+    hint.id = 'hb-walk-hint';
+    hint.style.cssText = `
+      display:none; position:fixed; bottom:22px; left:50%;
+      transform:translateX(-50%);
+      background:rgba(0,0,0,.65); color:#fff; padding:7px 20px;
+      border-radius:20px; font:13px/1.5 system-ui,sans-serif;
+      pointer-events:none; z-index:9999;`;
+    hint.innerHTML = `W&nbsp;A&nbsp;S&nbsp;D &nbsp;·&nbsp; Mouse para olhar
+      &nbsp;·&nbsp; <kbd style="background:#333;border-radius:4px;padding:1px 6px;font:inherit">ESC</kbd> para sair`;
+    document.body.appendChild(hint);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Bootstrap — integra com o homeBuilderBridge
-  // ═══════════════════════════════════════════════════════════════════════════
-  function waitForBridge() {
-    if (!window.homeBuilderBridge) { setTimeout(waitForBridge, 200); return; }
-
-    // Expõe API pública
-    window.homeBuilderBridge.enterWalk = enterWalk;
-    window.homeBuilderBridge.exitWalk  = exitWalk;
-
-    // Injetar botão quando o modelo for carregado
-    const origLoad = window.homeBuilderBridge.load.bind(window.homeBuilderBridge);
-    window.homeBuilderBridge.load = function(design) {
-      const result = origLoad(design);
-      setTimeout(injectWalkButton, 600);
-      return result;
-    };
-
-    // Injetar se já carregado
-    setTimeout(injectWalkButton, 800);
-  }
-
-  // Injetar botão quando a tab Design for clicada
-  document.addEventListener('click', e => {
-    if (e.target.closest('#design_tab')) {
-      setTimeout(() => {
-        if (!document.getElementById('hb-walk-btn')) injectWalkButton();
-      }, 400);
+  // ─── Bootstrap ───────────────────────────────────────────────────────────────
+  // Injetar botão quando a aba Design aparecer (clique ou já visível)
+  function tryInjectUI() {
+    // O #viewer só está visível quando a aba Design está ativa
+    const viewer = document.getElementById('viewer');
+    if (viewer && viewer.style.display !== 'none' && viewer.offsetParent !== null) {
+      injectUI();
     }
-  });
+  }
 
-  waitForBridge();
+  // Observar quando #camera-controls aparecer e injetar botão
+  function watchViewer() {
+    // #camera-controls sempre existe no DOM; o botão fica oculto junto com #viewer
+    const cc = document.getElementById('camera-controls');
+    if (!cc) { setTimeout(watchViewer, 150); return; }
+
+    injectUI(); // injeta imediatamente (antes mesmo de ter instância BP3D)
+
+    // Observar mudanças de display no #viewer para garantir injeção
+    const viewer = document.getElementById('viewer');
+    if (viewer) {
+      new MutationObserver(() => {
+        if (!document.getElementById('hb-walk-btn')) injectUI();
+      }).observe(viewer, { attributes: true, attributeFilter: ['style'] });
+    }
+
+    // Reagir a cliques nas tabs
+    document.addEventListener('click', e => {
+      if (e.target.closest('#design_tab') || e.target.closest('#update-floorplan')) {
+        setTimeout(() => {
+          if (!document.getElementById('hb-walk-btn')) injectUI();
+        }, 350);
+      }
+    });
+  }
+
+  // Aguardar o DOM estar pronto
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', watchViewer);
+  } else {
+    watchViewer();
+  }
+
+  // Expor API global para o bridge usar
+  window.homeBuilderWalk = { enterWalk, exitWalk, toggleWalk };
+
 })();
