@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CAD 2D & Planta Humanizada IA - Auditoria de Fidelidade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b0f17;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background-color: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 0.85rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      background: linear-gradient(135deg, #2ea043, #1f6feb);
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+    }
+
+    .brand h1 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .badge-ai {
+      background: linear-gradient(135deg, #a855f7, #6366f1);
+      color: #ffffff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .brand p {
+      font-size: 0.75rem;
+      color: #8b949e;
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 410px 1fr;
+      height: calc(100vh - 66px);
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background-color: #161b22;
+      border-right: 1px solid #30363d;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.15rem;
+      overflow-y: auto;
+    }
+
+    .tabs {
+      display: flex;
+      background: #0d1117;
+      padding: 0.25rem;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 0.5rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: transparent;
+      border: none;
+      color: #8b949e;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: #21262d;
+      color: #58a6ff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #8b949e;
+      margin-bottom: 0.35rem;
+    }
+
+    /* Dropzone */
+    .dropzone {
+      border: 2px dashed #30363d;
+      border-radius: 10px;
+      padding: 1.1rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #0d1117;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: #58a6ff;
+      background: rgba(88, 166, 255, 0.05);
+    }
+
+    .dropzone-icon {
+      font-size: 1.8rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .dropzone p {
+      font-size: 0.85rem;
+      color: #c9d1d9;
+    }
+
+    .dropzone small {
+      font-size: 0.7rem;
+      color: #8b949e;
+      display: block;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    .file-badge {
+      display: none;
+      background: #21262d;
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: #58a6ff;
+      border: 1px solid #30363d;
+      word-break: break-all;
+    }
+
+    /* Form controls */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .form-group label {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: #c9d1d9;
+    }
+
+    select, input[type="text"] {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 0.55rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    select:focus, input[type="text"]:focus {
+      border-color: #58a6ff;
+    }
+
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #8b949e;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      cursor: pointer;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1rem;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-primary {
+      background: #238636;
+      color: #ffffff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #2ea043;
+    }
+
+    .btn-ai {
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+    }
+
+    .btn-ai:hover:not(:disabled) {
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+    }
+
+    .btn-outline {
+      background: #0d1117;
+      color: #58a6ff;
+      border: 1px solid #388bfd44;
+    }
+
+    .btn-outline:hover:not(:disabled) {
+      background: rgba(56, 139, 253, 0.1);
+      border-color: #58a6ff;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #30363d;
+      color: #fff;
+    }
+
+    /* Raio-X dos Cômodos (Painel de Análise CAD) */
+    .cad-analysis-card {
+      display: none;
+      flex-direction: column;
+      gap: 0.75rem;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 0.85rem;
+      margin-top: 0.5rem;
+    }
+
+    .cad-analysis-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #21262d;
+      padding-bottom: 0.5rem;
+    }
+
+    .cad-analysis-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #a855f7;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .cad-analysis-summary {
+      font-size: 0.72rem;
+      color: #8b949e;
+      line-height: 1.3;
+    }
+
+    .rooms-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-height: 280px;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+
+    .room-item {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 0.6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .room-item-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .room-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #e6edf3;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .room-loc {
+      font-size: 0.68rem;
+      color: #8b949e;
+    }
+
+    .fixtures-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+
+    .fixture-badge {
+      background: rgba(56, 139, 253, 0.12);
+      color: #58a6ff;
+      border: 1px solid rgba(56, 139, 253, 0.3);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 500;
+    }
+
+    .room-details {
+      font-size: 0.72rem;
+      color: #c9d1d9;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      border-top: 1px dashed #30363d;
+      padding-top: 0.35rem;
+    }
+
+    .room-details span {
+      color: #8b949e;
+    }
+
+    /* Viewer Container */
+    .viewer-container {
+      position: relative;
+      background: #070a0f;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Barra Superior de Auditoria e Comparação */
+    .inspector-bar {
+      position: absolute;
+      top: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: rgba(22, 27, 34, 0.92);
+      backdrop-filter: blur(10px);
+      padding: 0.4rem 0.75rem;
+      border-radius: 10px;
+      border: 1px solid #30363d;
+      z-index: 20;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+
+    .mode-group {
+      display: flex;
+      gap: 0.25rem;
+      background: #0d1117;
+      padding: 0.2rem;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+    }
+
+    .mode-btn {
+      background: transparent;
+      border: none;
+      color: #8b949e;
+      padding: 0.35rem 0.65rem;
+      border-radius: 5px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: all 0.15s;
+    }
+
+    .mode-btn.active {
+      background: #21262d;
+      color: #58a6ff;
+    }
+
+    .inspector-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      border-left: 1px solid #30363d;
+      padding-left: 0.75rem;
+      font-size: 0.78rem;
+    }
+
+    .color-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.15s;
+    }
+
+    .color-dot:hover, .color-dot.active {
+      transform: scale(1.25);
+      border-color: #ffffff;
+    }
+
+    /* Área de renderização e Pan/Zoom */
+    .viewer-viewport {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+    }
+
+    .viewer-viewport:active {
+      cursor: grabbing;
+    }
+
+    .viewer-content {
+      transform-origin: center center;
+      transition: transform 0.05s ease-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Modo: Imagem Simples */
+    .single-view img, .single-view svg {
+      max-width: 80vw;
+      max-height: 80vh;
+      border-radius: 8px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+      display: block;
+    }
+
+    /* Modo: Lado a Lado */
+    .split-view {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .split-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      background: #161b22;
+      padding: 0.75rem;
+      border-radius: 10px;
+      border: 1px solid #30363d;
+    }
+
+    .split-card span {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #c9d1d9;
+    }
+
+    .split-card img, .split-card svg {
+      width: 440px;
+      height: 440px;
+      object-fit: contain;
+      border-radius: 6px;
+      background: #0d1117;
+    }
+
+    /* Modo: Sobreposição (Overlay) */
+    .overlay-view {
+      position: relative;
+      display: inline-block;
+      width: 700px;
+      height: 700px;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+      background: #0d1117;
+    }
+
+    .overlay-view img.base-render {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .overlay-view .svg-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      transition: opacity 0.1s ease;
+    }
+
+    .overlay-view .svg-layer svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Modo: Cortina Antes / Depois */
+    .curtain-view {
+      position: relative;
+      width: 700px;
+      height: 700px;
+      border-radius: 8px;
+      overflow: hidden;
+      user-select: none;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+    }
+
+    .curtain-view img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .curtain-view .curtain-after {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%);
+      background: #ffffff;
+    }
+
+    .curtain-divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 3px;
+      background: #58a6ff;
+      cursor: ew-resize;
+      box-shadow: 0 0 10px rgba(88, 166, 255, 0.8);
+    }
+
+    .curtain-handle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 32px;
+      height: 32px;
+      background: #58a6ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      color: #0d1117;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+
+    /* Controles de Zoom/Pan */
+    .viewer-controls {
+      position: absolute;
+      bottom: 1.25rem;
+      right: 1.25rem;
+      display: flex;
+      gap: 0.5rem;
+      background: rgba(22, 27, 34, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 0.35rem;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      z-index: 20;
+    }
+
+    .viewer-controls button {
+      background: transparent;
+      border: none;
+      color: #c9d1d9;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .viewer-controls button:hover {
+      background: #30363d;
+      color: #fff;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #8b949e;
+    }
+
+    .empty-state-icon {
+      font-size: 3.5rem;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .toast {
+      position: fixed;
+      top: 1.5rem;
+      right: 1.5rem;
+      background: #da3633;
+      color: white;
+      padding: 0.75rem 1.25rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      display: none;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">📐</div>
+      <div>
+        <h1>CAD 2D & Planta Humanizada <span class="badge-ai">Raio-X de Cômodos IA</span></h1>
+        <p>Motor 9Router cx/gpt-image-2.5 (OpenAI Codex) com leitura e análise semântica direta do DXF</p>
+      </div>
+    </div>
+    <div style="font-size: 0.8rem; color: #8b949e;">
+      Status: <span style="color: #4ade80;">● 9Router Online (10.0.0.107:20128)</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="tabs">
+        <a href="/">Editor Blueprint3D</a>
+        <button class="tab-btn" id="tabTechnical">📐 Planta 2D</button>
+        <button class="tab-btn" id="tabHumanize">✨ Humanizada IA</button>
+      </div>
+
+      <div class="section-title">Arquivo da Planta</div>
+      
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone-icon">📁</div>
+        <p>Arraste o arquivo <strong>.dwg</strong> ou <strong>.dxf</strong></p>
+        <small>Conversão técnica e humanização</small>
+        <input type="file" id="fileInput" accept=".dwg,.dxf,.svg" />
+      </div>
+
+
+
+      <div id="fileBadge" class="file-badge"></div>
+
+      <!-- Painel 2: Técnico 2D -->
+      <div id="panelTechnical" style="display: none; flex-direction: column; gap: 1rem;">
+        <div class="section-title">Opções 2D</div>
+        <div class="form-group">
+          <label for="formatSelect">Formato da Imagem:</label>
+          <select id="formatSelect">
+            <option value="svg" selected>SVG (Vetor nítido, zoom infinito)</option>
+            <option value="png">PNG (Imagem rasterizada)</option>
+            <option value="pdf">PDF (Impressão e plotagem)</option>
+            <option value="dxf">DXF (Arquivo vetorial CAD)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="themeSelect">Tema do Desenho:</label>
+          <select id="themeSelect">
+            <option value="light" selected>Paper White (Fundo branco / Linhas pretas)</option>
+            <option value="dark">Dark Blueprint (Fundo escuro / Verde)</option>
+          </select>
+        </div>
+
+        <button id="convertBtn" class="btn btn-primary" disabled>
+          <div class="spinner" id="loadingSpinner"></div>
+          <span id="btnText">Gerar Imagem 2D</span>
+        </button>
+      </div>
+
+      <!-- Painel 3: Planta Humanizada IA -->
+      <div id="panelHumanize" style="display: none; flex-direction: column; gap: 1rem;">
+        <div class="section-title">Configurações de Decoração IA</div>
+        
+        <div class="form-group">
+          <label for="modelSelect">Modelo de IA (Imagem):</label>
+          <select id="modelSelect">
+            <option value="cx/gpt-image-2.5" selected>🔥 cx/gpt-image-2.5 (OpenAI Codex - Recomendado)</option>
+            <option value="cx/gpt-image-2.5-flare">⚡ cx/gpt-image-2.5-flare (Codex Flare)</option>
+            <option value="cx/gpt-image-2.5-sunburst">☀️ cx/gpt-image-2.5-sunburst (Codex Sunburst)</option>
+            <option value="cx/gpt-image-2">🤖 cx/gpt-image-2 (Codex Image 2)</option>
+            <option value="cx/gpt-5.6-sol-image">🪐 cx/gpt-5.6-sol-image (Codex Sol)</option>
+            <option value="cx/gpt-5.6-terra-image">🌍 cx/gpt-5.6-terra-image (Codex Terra)</option>
+            <option value="cx/gpt-5.6-luna-image">🌙 cx/gpt-5.6-luna-image (Codex Luna)</option>
+            <option value="recraftv4_1">🎨 Recraft v4.1 (API Externa)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="styleSelect">Estilo de Decoração:</label>
+          <select id="styleSelect">
+            <option value="modern" selected>🌟 Moderno Contemporâneo (Madeira e Tons Neutros)</option>
+            <option value="luxury">💎 Alto Padrão / Luxo (Mármore e Iluminação Cênica)</option>
+            <option value="scandinavian">🌿 Escandinavo (Madeira Clara e Luz Solar)</option>
+            <option value="industrial">🏭 Industrial Urbano (Concreto e Couro)</option>
+          </select>
+        </div>
+
+        <div class="form-group slider-container">
+          <div class="slider-header">
+            <span>Fidelidade Estrutural</span>
+            <span id="strengthVal">40%</span>
+          </div>
+          <input type="range" id="strengthRange" min="0.25" max="0.55" step="0.05" value="0.40" />
+          <small style="color: #8b949e; font-size: 0.7rem;">
+            Mantém rigorosa fidelidade geométrica às paredes, portas e janelas.
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label for="customNotes">Observações Personalizadas (opcional):</label>
+          <input type="text" id="customNotes" placeholder="ex: piso amadeirado claro, bancada preta" />
+        </div>
+
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="analyzeBtn" class="btn btn-outline" style="flex: 1;" disabled>
+            <div class="spinner" id="analyzeSpinner"></div>
+            <span id="analyzeBtnText">🔍 Raio-X dos Cômodos</span>
+          </button>
+          
+          <button id="humanizeBtn" class="btn btn-ai" style="flex: 2;" disabled>
+            <div class="spinner" id="humanizeSpinner"></div>
+            <span id="humanizeBtnText">✨ Gerar Humanizada</span>
+          </button>
+        </div>
+
+        <!-- Card de Raio-X e Interpretação dos Cômodos -->
+        <div class="cad-analysis-card" id="cadAnalysisContainer">
+          <div class="cad-analysis-header">
+            <span class="cad-analysis-title">📋 Raio-X dos Cômodos (IA)</span>
+            <span id="roomsCountBadge" style="font-size: 0.68rem; background: #21262d; padding: 0.15rem 0.45rem; border-radius: 4px; color: #58a6ff;">0 cômodos</span>
+          </div>
+          <div class="cad-analysis-summary" id="analysisSummary"></div>
+          <div class="rooms-list" id="analysisRoomsList"></div>
+        </div>
+      </div>
+
+      <button id="downloadBtn" class="btn btn-secondary" style="display: none;">
+        💾 Baixar Imagem Ativa
+      </button>
+
+      <div style="margin-top: auto; font-size: 0.75rem; color: #8b949e; line-height: 1.4;">
+        💡 <strong>Auditoria de Fidelidade:</strong> Quando a planta for gerada, use a barra superior para <strong>Sobrepor Traçado</strong> com opacidade ajustável ou alternar <strong>Lado a Lado</strong> e <strong>Cortina</strong>.
+      </div>
+    </aside>
+
+    <!-- Visualizador -->
+    <section class="viewer-container" id="viewerContainer">
+      <!-- Barra Superior de Auditoria e Comparação -->
+      <div class="inspector-bar" id="inspectorBar" style="display: none;">
+        <div class="mode-group">
+          <button class="mode-btn active" id="btnModeOverlay" title="Sobrepor linhas CAD sobre a imagem">🎯 Sobrepor Traçado</button>
+          <button class="mode-btn" id="btnModeSplit" title="Ver plantas lado a lado">📑 Lado a Lado</button>
+          <button class="mode-btn" id="btnModeCurtain" title="Deslizar cortina antes e depois">🌓 Cortina</button>
+          <button class="mode-btn" id="btnModeHumanized" title="Ver apenas a imagem foto-realista">✨ Humanizada</button>
+          <button class="mode-btn" id="btnModeTechnical" title="Ver apenas a planta técnica 2D">📐 Técnica</button>
+        </div>
+
+        <!-- Controles exclusivos do modo Sobreposição -->
+        <div class="inspector-controls" id="overlayControls">
+          <span>Opacidade:</span>
+          <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.8" style="width: 75px;" />
+          <span id="opacityVal" style="min-width: 28px;">80%</span>
+
+          <span style="margin-left: 0.4rem;">Cor do Traçado:</span>
+          <div class="color-dot active" data-color="#ff0000" style="background: #ff0000;" title="Vermelho Alerta"></div>
+          <div class="color-dot" data-color="#06b6d4" style="background: #06b6d4;" title="Ciano"></div>
+          <div class="color-dot" data-color="#22c55e" style="background: #22c55e;" title="Verde"></div>
+          <div class="color-dot" data-color="#000000" style="background: #000000;" title="Preto"></div>
+          <div class="color-dot" data-color="#ffffff" style="background: #ffffff;" title="Branco"></div>
+        </div>
+      </div>
+
+      <!-- Viewport com Pan e Zoom (2D Técnico / Humanizada) -->
+      <div class="viewer-viewport" id="viewport" style="display: none;">
+        <div class="viewer-content" id="viewerContent">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-state-icon">📄</div>
+            <h3>Nenhuma planta carregada</h3>
+            <p>Faça upload de um arquivo DWG ou DXF no painel ao lado</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="viewer-controls" id="viewerControls" style="display: none;">
+        <button id="zoomInBtn" title="Zoom +">➕</button>
+        <button id="zoomOutBtn" title="Zoom -">➖</button>
+        <button id="resetViewBtn" title="Ajustar à Tela">🔄</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let selectedFile = null;
+    let technicalUrl = null;
+    let humanizedUrl = null;
+    let rawSvgContent = null;
+    let currentModelName = 'cx/gpt-image-2.5';
+    let activeInspectionMode = 'overlay'; // 'overlay', 'split', 'curtain', 'humanized', 'technical'
+    let overlayColor = '#ff0000'; // Vermelho por padrão para alto contraste
+    let overlayOpacity = 0.8;
+    let curtainPercent = 50;
+
+    // Tabs
+    const tabTechnical = document.getElementById('tabTechnical');
+    const tabHumanize = document.getElementById('tabHumanize');
+    const panelTechnical = document.getElementById('panelTechnical');
+    const panelHumanize = document.getElementById('panelHumanize');
+
+    function switchTab(target) {
+      tabTechnical.classList.toggle('active', target === 'technical');
+      tabHumanize.classList.toggle('active', target === 'humanize');
+
+      panelTechnical.style.display = target === 'technical' ? 'flex' : 'none';
+      panelHumanize.style.display = target === 'humanize' ? 'flex' : 'none';
+
+      {
+        viewport.style.display = 'flex';
+        if (target === 'technical') {
+          viewerControls.style.display = technicalUrl ? 'flex' : 'none';
+          inspectorBar.style.display = 'none';
+          downloadBtn.style.display = technicalUrl ? 'block' : 'none';
+        } else if (target === 'humanize') {
+          viewerControls.style.display = humanizedUrl ? 'flex' : 'none';
+          inspectorBar.style.display = humanizedUrl ? 'flex' : 'none';
+          downloadBtn.style.display = humanizedUrl ? 'block' : 'none';
+        }
+      }
+    }
+
+    tabTechnical.addEventListener('click', () => switchTab('technical'));
+    tabHumanize.addEventListener('click', () => switchTab('humanize'));
+
+    // Slider strength
+    const strengthRange = document.getElementById('strengthRange');
+    const strengthVal = document.getElementById('strengthVal');
+    strengthRange.addEventListener('input', (e) => {
+      strengthVal.textContent = Math.round(e.target.value * 100) + '%';
+    });
+
+    // File Drop
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const fileBadge = document.getElementById('fileBadge');
+    const convertBtn = document.getElementById('convertBtn');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const humanizeBtn = document.getElementById('humanizeBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const emptyState = document.getElementById('emptyState');
+    const viewerContent = document.getElementById('viewerContent');
+    const viewerControls = document.getElementById('viewerControls');
+    const inspectorBar = document.getElementById('inspectorBar');
+    const overlayControls = document.getElementById('overlayControls');
+    const opacitySlider = document.getElementById('opacitySlider');
+    const opacityVal = document.getElementById('opacityVal');
+    const toast = document.getElementById('toast');
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 7000);
+    }
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) handleFile(e.target.files[0]);
+    });
+
+    function handleFile(file) {
+      selectedFile = file;
+      fileBadge.textContent = `📄 ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+      fileBadge.style.display = 'block';
+      convertBtn.disabled = false;
+      analyzeBtn.disabled = false;
+      humanizeBtn.disabled = false;
+      switchTab('technical');
+    }
+
+    // Renderiza o Raio-X dos Cômodos identificado no CAD
+    function renderCadAnalysis(analysis) {
+      if (!analysis || !analysis.roomsAnalysis) return;
+      const container = document.getElementById('cadAnalysisContainer');
+      const summaryEl = document.getElementById('analysisSummary');
+      const listEl = document.getElementById('analysisRoomsList');
+      const badgeEl = document.getElementById('roomsCountBadge');
+
+      container.style.display = 'flex';
+      summaryEl.textContent = analysis.residenceSummary || 'Planta Residencial';
+      badgeEl.textContent = `${analysis.roomsAnalysis.length} cômodos identificados`;
+      listEl.innerHTML = '';
+
+      const getIcon = (name) => {
+        if (/dormi|quarto/i.test(name)) return '🛏️';
+        if (/cozinh/i.test(name)) return '🍳';
+        if (/wc|banh/i.test(name)) return '🚿';
+        if (/estar|sala/i.test(name)) return '🛋️';
+        if (/varand|sacad/i.test(name)) return '🌿';
+        return '🚪';
+      };
+
+      analysis.roomsAnalysis.forEach(room => {
+        const item = document.createElement('div');
+        item.className = 'room-item';
+
+        let fixturesHtml = '';
+        if (room.identifiedFixtures && room.identifiedFixtures.length > 0) {
+          fixturesHtml = `
+            <div class="fixtures-badges">
+              ${room.identifiedFixtures.map(f => `<span class="fixture-badge">📍 ${f}</span>`).join('')}
+            </div>
+          `;
+        }
+
+        item.innerHTML = `
+          <div class="room-item-top">
+            <span class="room-title">${getIcon(room.name)} ${room.name}</span>
+            <span class="room-loc">${room.location || ''}</span>
+          </div>
+          ${fixturesHtml}
+          <div class="room-details">
+            <div><span>Piso:</span> ${room.flooring || 'Padrão'}</div>
+            <div><span>Móveis:</span> ${room.staging || 'Planejado'}</div>
+          </div>
+        `;
+        listEl.appendChild(item);
+      });
+    }
+
+    // 1. Geração Planta 2D Técnica
+    convertBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+
+      const format = document.getElementById('formatSelect').value;
+      const theme = document.getElementById('themeSelect').value;
+      const spinner = document.getElementById('loadingSpinner');
+      const btnText = document.getElementById('btnText');
+
+      convertBtn.disabled = true;
+      spinner.style.display = 'block';
+      btnText.textContent = 'Processando 2D...';
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      try {
+        const response = await fetch(`/api/convert?format=${format}&theme=${theme}`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.details || err.error || 'Erro na conversão');
+        }
+
+        if (format === 'svg') {
+          rawSvgContent = await response.text();
+          const blob = new Blob([rawSvgContent], { type: 'image/svg+xml' });
+          if (technicalUrl) URL.revokeObjectURL(technicalUrl);
+          technicalUrl = URL.createObjectURL(blob);
+        } else {
+          const blob = await response.blob();
+          if (technicalUrl) URL.revokeObjectURL(technicalUrl);
+          technicalUrl = URL.createObjectURL(blob);
+        }
+
+        renderCurrentMode();
+      } catch (err) {
+        showToast(err.message);
+      } finally {
+        convertBtn.disabled = false;
+        spinner.style.display = 'none';
+        btnText.textContent = 'Gerar Imagem 2D';
+      }
+    });
+
+    // 2. Raio-X dos Cômodos via IA
+    analyzeBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+
+      const style = document.getElementById('styleSelect').value;
+      const customNotes = document.getElementById('customNotes').value;
+      const spinner = document.getElementById('analyzeSpinner');
+      const btnText = document.getElementById('analyzeBtnText');
+
+      analyzeBtn.disabled = true;
+      spinner.style.display = 'block';
+      btnText.textContent = 'Analisando cômodos com IA...';
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('style', style);
+      formData.append('customNotes', customNotes);
+      formData.append('noFallback', 'true');
+
+      try {
+        const response = await fetch('/api/analyze-cad', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.details || data.error || 'Erro ao analisar cômodos com IA');
+        }
+
+        renderCadAnalysis(data.analysis);
+      } catch (err) {
+        showToast(err.message);
+      } finally {
+        analyzeBtn.disabled = false;
+        spinner.style.display = 'none';
+        btnText.textContent = '🔍 Raio-X dos Cômodos';
+      }
+    });
+
+    // 3. Geração Planta Humanizada IA
+    humanizeBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+
+      const model = document.getElementById('modelSelect').value;
+      const style = document.getElementById('styleSelect').value;
+      const strength = strengthRange.value;
+      const customNotes = document.getElementById('customNotes').value;
+      const spinner = document.getElementById('humanizeSpinner');
+      const btnText = document.getElementById('humanizeBtnText');
+
+      currentModelName = model;
+      humanizeBtn.disabled = true;
+      analyzeBtn.disabled = true;
+      spinner.style.display = 'block';
+      btnText.textContent = 'Renderizando IA...';
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('model', model);
+      formData.append('style', style);
+      formData.append('strength', strength);
+      formData.append('customNotes', customNotes);
+      formData.append('noFallback', 'true');
+
+      try {
+        const response = await fetch('/api/humanize?format=json', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.details || data.error || 'Erro ao gerar humanização');
+        }
+
+        humanizedUrl = data.imageUrl;
+        if (data.technicalUrl) technicalUrl = data.technicalUrl;
+        if (data.svgString) rawSvgContent = data.svgString;
+        if (data.modelUsed) currentModelName = data.modelUsed;
+
+        // Renderiza o Raio-X dos cômodos usado para guiar o render
+        if (data.cadAnalysis) {
+          renderCadAnalysis(data.cadAnalysis);
+        }
+
+        activeInspectionMode = 'overlay'; // Modo sobreposição ativo por padrão
+        renderCurrentMode();
+      } catch (err) {
+        showToast(err.message);
+      } finally {
+        humanizeBtn.disabled = false;
+        analyzeBtn.disabled = false;
+        spinner.style.display = 'none';
+        btnText.textContent = '✨ Gerar Humanizada';
+      }
+    });
+
+    // Renderização dos Modos de Inspeção
+    function renderCurrentMode() {
+      emptyState.style.display = 'none';
+      viewerContent.innerHTML = '';
+      viewerControls.style.display = 'flex';
+      downloadBtn.style.display = 'inline-flex';
+
+      const hasBoth = technicalUrl && humanizedUrl;
+      inspectorBar.style.display = hasBoth ? 'flex' : 'none';
+
+      // Atualiza botões ativos
+      document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+      const activeBtn = document.getElementById(`btnMode${capitalize(activeInspectionMode)}`);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      overlayControls.style.display = (activeInspectionMode === 'overlay' && hasBoth) ? 'flex' : 'none';
+
+      if (!hasBoth) {
+        // Exibe o que estiver disponível
+        const activeUrl = humanizedUrl || technicalUrl;
+        if (!activeUrl) return;
+        const container = document.createElement('div');
+        container.className = 'single-view';
+        const img = document.createElement('img');
+        img.src = activeUrl;
+        img.onload = () => resetTransform();
+        container.appendChild(img);
+        viewerContent.appendChild(container);
+        return;
+      }
+
+      // 1. MODO: SOBREPOSIÇÃO (OVERLAY)
+      if (activeInspectionMode === 'overlay') {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'overlay-view';
+
+        const img = document.createElement('img');
+        img.className = 'base-render';
+        img.src = humanizedUrl;
+
+        const svgLayer = document.createElement('div');
+        svgLayer.className = 'svg-layer';
+        svgLayer.id = 'svgOverlayLayer';
+        svgLayer.style.opacity = overlayOpacity;
+
+        // Injeta o SVG com a cor do traçado configurada
+        svgLayer.innerHTML = getStyledSvg(rawSvgContent, overlayColor);
+
+        wrapper.appendChild(img);
+        wrapper.appendChild(svgLayer);
+        viewerContent.appendChild(wrapper);
+        img.onload = () => resetTransform();
+      }
+
+      // 2. MODO: LADO A LADO (SPLIT)
+      else if (activeInspectionMode === 'split') {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'split-view';
+
+        // Card Esquerda: Técnica CAD
+        const cardTech = document.createElement('div');
+        cardTech.className = 'split-card';
+        cardTech.innerHTML = `<span>📐 Planta CAD Técnica (Original)</span><img src="${technicalUrl}" alt="CAD 2D" />`;
+
+        // Card Direita: Humanizada IA
+        const cardHum = document.createElement('div');
+        cardHum.className = 'split-card';
+        cardHum.innerHTML = `<span>✨ Planta Humanizada (${currentModelName})</span><img src="${humanizedUrl}" alt="Humanizada" />`;
+
+        wrapper.appendChild(cardTech);
+        wrapper.appendChild(cardHum);
+        viewerContent.appendChild(wrapper);
+        resetTransform();
+      }
+
+      // 3. MODO: CORTINA ANTES/DEPOIS
+      else if (activeInspectionMode === 'curtain') {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'curtain-view';
+        wrapper.id = 'curtainContainer';
+
+        const imgBefore = document.createElement('img');
+        imgBefore.src = humanizedUrl;
+
+        const imgAfterWrap = document.createElement('div');
+        imgAfterWrap.className = 'curtain-after';
+        imgAfterWrap.id = 'curtainAfterWrap';
+        const imgAfter = document.createElement('img');
+        imgAfter.src = technicalUrl;
+        imgAfterWrap.appendChild(imgAfter);
+
+        const divider = document.createElement('div');
+        divider.className = 'curtain-divider';
+        divider.id = 'curtainDivider';
+        divider.innerHTML = `<div class="curtain-handle">⇄</div>`;
+
+        wrapper.appendChild(imgBefore);
+        wrapper.appendChild(imgAfterWrap);
+        wrapper.appendChild(divider);
+        viewerContent.appendChild(wrapper);
+        setupCurtainDrag(wrapper, imgAfterWrap, divider);
+        resetTransform();
+      }
+
+      // 4. MODO: APENAS HUMANIZADA
+      else if (activeInspectionMode === 'humanized') {
+        const container = document.createElement('div');
+        container.className = 'single-view';
+        const img = document.createElement('img');
+        img.src = humanizedUrl;
+        img.onload = () => resetTransform();
+        container.appendChild(img);
+        viewerContent.appendChild(container);
+      }
+
+      // 5. MODO: APENAS TÉCNICA
+      else if (activeInspectionMode === 'technical') {
+        const container = document.createElement('div');
+        container.className = 'single-view';
+        const img = document.createElement('img');
+        img.src = technicalUrl;
+        img.onload = () => resetTransform();
+        container.appendChild(img);
+        viewerContent.appendChild(container);
+      }
+    }
+
+    function capitalize(str) {
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    function getStyledSvg(svgStr, strokeColor) {
+      if (!svgStr) return '';
+      let styled = svgStr;
+      // Remove retângulos de fundo para ficar 100% transparente na sobreposição
+      styled = styled.replace(/<rect[^>]*fill="[^"]*"[^>]*>/gi, '');
+      // Aplica cor do traçado selecionado
+      styled = styled.replace(/stroke="[^"]*"/gi, `stroke="${strokeColor}"`);
+      styled = styled.replace(/stroke-width="[^"]*"/gi, `stroke-width="0.05"`);
+      return styled;
+    }
+
+    // Drag Cortina
+    function setupCurtainDrag(container, afterWrap, divider) {
+      let isDragging = false;
+      const onMove = (clientX) => {
+        const rect = container.getBoundingClientRect();
+        let x = clientX - rect.left;
+        x = Math.max(0, Math.min(x, rect.width));
+        const p = (x / rect.width) * 100;
+        curtainPercent = p;
+        divider.style.left = `${p}%`;
+        afterWrap.style.clipPath = `polygon(0 0, ${p}% 0, ${p}% 100%, 0 100%)`;
+      };
+
+      divider.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        isDragging = true;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        onMove(e.clientX);
+      });
+
+      window.addEventListener('mouseup', () => { isDragging = false; });
+    }
+
+    // Seletor de Modos na Barra Superior
+    document.getElementById('btnModeOverlay').addEventListener('click', () => { activeInspectionMode = 'overlay'; renderCurrentMode(); });
+    document.getElementById('btnModeSplit').addEventListener('click', () => { activeInspectionMode = 'split'; renderCurrentMode(); });
+    document.getElementById('btnModeCurtain').addEventListener('click', () => { activeInspectionMode = 'curtain'; renderCurrentMode(); });
+    document.getElementById('btnModeHumanized').addEventListener('click', () => { activeInspectionMode = 'humanized'; renderCurrentMode(); });
+    document.getElementById('btnModeTechnical').addEventListener('click', () => { activeInspectionMode = 'technical'; renderCurrentMode(); });
+
+    // Controles de Sobreposição (Opacidade e Cor)
+    opacitySlider.addEventListener('input', (e) => {
+      overlayOpacity = e.target.value;
+      opacityVal.textContent = Math.round(overlayOpacity * 100) + '%';
+      const layer = document.getElementById('svgOverlayLayer');
+      if (layer) layer.style.opacity = overlayOpacity;
+    });
+
+    document.querySelectorAll('.color-dot').forEach(dot => {
+      dot.addEventListener('click', (e) => {
+        document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+        e.target.classList.add('active');
+        overlayColor = e.target.dataset.color;
+        const layer = document.getElementById('svgOverlayLayer');
+        if (layer) layer.innerHTML = getStyledSvg(rawSvgContent, overlayColor);
+      });
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      const activeUrl = humanizedUrl || technicalUrl;
+      if (!activeUrl) return;
+      const a = document.createElement('a');
+      a.href = activeUrl;
+      a.download = `planta_${activeInspectionMode}.png`;
+      a.click();
+    });
+
+    // Pan & Zoom
+    const viewport = document.getElementById('viewport');
+    let scale = 1, pointX = 0, pointY = 0, isPanning = false, startX = 0, startY = 0;
+
+    function updateTransform() {
+      viewerContent.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
+    }
+
+    function resetTransform() {
+      scale = 1; pointX = 0; pointY = 0; updateTransform();
+    }
+
+    viewport.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = 1.15;
+      scale = e.deltaY < 0 ? Math.min(scale * zoomFactor, 20) : Math.max(scale / zoomFactor, 0.2);
+      updateTransform();
+    });
+
+    viewport.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.curtain-divider') || e.target.closest('.inspector-bar')) return;
+      if (e.button !== 0) return;
+      isPanning = true; startX = e.clientX - pointX; startY = e.clientY - pointY;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isPanning) return;
+      pointX = e.clientX - startX; pointY = e.clientY - startY; updateTransform();
+    });
+
+    window.addEventListener('mouseup', () => isPanning = false);
+    document.getElementById('zoomInBtn').addEventListener('click', () => { scale = Math.min(scale * 1.3, 20); updateTransform(); });
+    document.getElementById('zoomOutBtn').addEventListener('click', () => { scale = Math.max(scale / 1.3, 0.2); updateTransform(); });
+    document.getElementById('resetViewBtn').addEventListener('click', resetTransform);
+
+    switchTab('technical');
+  </script>
+</body>
+</html>

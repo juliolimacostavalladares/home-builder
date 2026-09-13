@@ -1,11 +1,12 @@
 {
   "name": "home-builder-cad-api",
   "version": "1.0.0",
-  "description": "API Node.js para conversão de DWG/DXF em imagens 2D (SVG e PNG) e visualizador de planta",
+  "description": "Conversão CAD para o editor original furnishup/blueprint3d integrado",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/test-3d.js"
+    "test": "node --test test/*.test.js",
+    "build:blueprint": "cd vendor/blueprint3d && npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund && node_modules/.bin/grunt"
   },
   "keywords": [
     "cad",
@@ -24,7 +25,6 @@
     "express": "^4.21.2",
     "multer": "^1.4.5-lts.1",
     "nasjidwg": "^0.18.0",
-    "sharp": "^0.33.5",
-    "three": "^0.186.0"
+    "sharp": "^0.33.5"
   }
 }

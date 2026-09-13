@@ -1,0 +1,20 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('fs'),vm=require('vm'),path=require('path');
+const {inventory,validateInterpretation}=require('../integration/cad-inventory');
+const {convertDxf}=require('../integration/cad-to-blueprint');
+const {validateNative}=require('../integration/validate-native');
+const line=(a,b)=>`0\nLINE\n8\nCAD\n10\n${a[0]}\n20\n${a[1]}\n11\n${b[0]}\n21\n${b[1]}\n`;
+test('An actual open-floor CAD edge closes the native floor without creating a raised wall',()=>{
+ const dxf='0\nSECTION\n2\nENTITIES\n'+[[[0,0],[4,0]],[[4,0],[4,3]],[[4,3],[0,3]],[[0,3],[0,0]]].map(([a,b])=>line(a,b)).join('')+'0\nENDSEC\n0\nEOF\n';
+ const data=inventory(dxf),answer={unit:'m',assignments:[{role:'wall_axis',ids:['e0','e1','e2']},{role:'floor_boundary',ids:['e3']}]};
+ const roles=validateInterpretation(answer,data),result=convertDxf(dxf,{unit:'m',roles});
+ assert.equal(result.design.floorplan.walls.filter(w=>w.cad?.floorBoundary).length,1);
+ const validation=validateNative(result,data,roles);assert.deepEqual(validation.issues,[]);assert.equal(validation.rooms,1);
+ const context=vm.createContext({THREE:require('../vendor/blueprint3d/node_modules/three'),console:{log(){},warn(){}},$:{Callbacks(){return {add(){},fire(){},remove(){}};}}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/blueprint3d/example/js/blueprint3d.js'),'utf8'),context);
+ const model=new context.BP3D.Model.Model('models/textures/');require('../public/native-cad-properties').install(model);model.floorplan.loadFloorplan(result.design.floorplan);
+ const boundary=model.floorplan.getWalls().find(w=>w.cadFloorBoundary);assert.equal(boundary.height,0);assert.equal(boundary.thickness,0);
+ assert.equal(model.floorplan.getWalls().find(w=>!w.cadFloorBoundary).thickness,15);
+ assert.equal(model.floorplan.saveFloorplan().walls.filter(w=>w.cad?.floorBoundary).length,1);
+});
