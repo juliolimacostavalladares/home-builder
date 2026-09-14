@@ -1,0 +1,70 @@
+{
+  "version": "cad-blueprint3d/2",
+  "purpose": "A IA interpreta o CAD e produz diretamente o documento Blueprint3D. O aplicativo valida e importa, sem reconstrução geométrica heurística.",
+  "coordinates": {
+    "source": "Coordenadas CAD mundiais (WCS), após aplicar matrizes de INSERT e origem dos blocos.",
+    "target": "Centímetros; planta em x/y, cena 3D em x/z; ângulos em radianos.",
+    "formula": "target.x=(source.x-origin.x)*scaleToCm; target.y=-(source.y-origin.y)*scaleToCm. Não rotacionar, esticar nem deslocar partes separadamente.",
+    "unitScales": {"mm":0.1,"cm":1,"m":100,"in":2.54,"ft":30.48},
+    "invariants": ["Unidade declarada no cabeçalho prevalece.","Ausência de unidade exige evidência dimensional no CAD.","Coordenadas numéricas vêm do CAD; imagem auxilia a interpretação semântica."]
+  },
+  "categories": {
+    "wall_face":{"label":"Parede — faces","color":"#15803d","destination":"wall","meaning":"Faces de alvenaria; a IA identifica espessura local, eixo, junções e representação equivalente."},
+    "wall_axis":{"label":"Parede — eixo","color":"#15803d","destination":"wall","meaning":"Eixo explícito de parede."},
+    "wall_detail":{"label":"Retorno / batente","color":"#16a34a","destination":"wall","meaning":"Detalhe de espessura, retorno ou batente associado pela IA a uma parede ou vão, sem criar parede duplicada."},
+    "floor_boundary":{"label":"Borda de piso aberto","color":"#dc2626","destination":"floor_boundary","meaning":"Contorno físico existente de piso aberto, sem alvenaria."},
+    "door":{"label":"Porta","color":"#92400e","destination":"in_wall_item","meaning":"Folha, arco, batentes e símbolo do mesmo vão devem produzir um único objeto nativo."},
+    "window":{"label":"Janela","color":"#7e22ce","destination":"in_wall_item","meaning":"Linhas e componentes do caixilho devem produzir um único objeto nativo."},
+    "room_label":{"label":"Ambiente","color":"#1d4ed8","destination":"room_evidence","meaning":"Identifica ambiente e posição; todos os ambientes devem estar cobertos por pisos nativos."},
+    "column":{"label":"Pilar","color":"#166534","destination":"preserved","meaning":"Sem equivalente estrutural paramétrico implementado no destino; preservar dados e declarar limitação."},
+    "beam":{"label":"Viga","color":"#3f6212","destination":"preserved","meaning":"Preservar seção, altura e referências; não converter em parede."},
+    "slab":{"label":"Laje","color":"#be123c","destination":"preserved","meaning":"Laje estrutural não equivale ao piso plano de Room; preservar espessura e cota."},
+    "roof":{"label":"Cobertura / telhado","color":"#b45309","destination":"preserved","meaning":"Preservar inclinações e projeções; não converter projeções em paredes."},
+    "stair":{"label":"Escada","color":"#a16207","destination":"preserved","meaning":"Preservar degraus, patamares, desníveis e sentido."},
+    "ramp":{"label":"Rampa","color":"#854d0e","destination":"preserved","meaning":"Preservar inclinação e desníveis."},
+    "railing":{"label":"Guarda-corpo","color":"#475569","destination":"preserved","meaning":"Não equivaler automaticamente a alvenaria."},
+    "level":{"label":"Nível / pavimento","color":"#0e7490","destination":"preserved","meaning":"O documento Blueprint3D desta integração representa uma planta plana; declarar pavimentos adicionais."},
+    "opening":{"label":"Abertura sem esquadria","color":"#9333ea","destination":"preserved","meaning":"Não inventar uma porta ou janela para um vazio."},
+    "foundation":{"label":"Fundação","color":"#78350f","destination":"preserved","meaning":"Preservar geometria e níveis; sem equivalente nativo implementado."},
+    "terrain":{"label":"Terreno / limite","color":"#65a30d","destination":"preserved","meaning":"Preservar perímetro e topografia; não transformar limite do lote em parede."},
+    "plumbing":{"label":"Instalação hidráulica","color":"#0891b2","destination":"preserved","meaning":"Preservar tubulações, equipamentos e anotações técnicas."},
+    "electrical":{"label":"Instalação elétrica","color":"#ca8a04","destination":"preserved","meaning":"Preservar circuitos, pontos e símbolos técnicos."},
+    "fixture":{"label":"Louça / equipamento","color":"#0f766e","destination":"preserved","meaning":"Preservar dados CAD; não inventar um modelo decorativo equivalente."},
+    "furniture":{"label":"Mobiliário","color":"#0d9488","destination":"preserved","meaning":"Preservar dados CAD; não substituir por objeto arbitrário do catálogo."},
+    "dimension":{"label":"Cota","color":"#0369a1","destination":"preserved","meaning":"Fonte de medidas e escala; não gera geometria física."},
+    "section":{"label":"Corte","color":"#475569","destination":"preserved","meaning":"Fonte de alturas e relações verticais; não sobrepor à planta como paredes."},
+    "elevation":{"label":"Fachada","color":"#64748b","destination":"preserved","meaning":"Fonte de alturas e aberturas; preservar vista técnica."},
+    "hatch":{"label":"Hachura / revestimento","color":"#a3a3a3","destination":"preserved","meaning":"Textura, paginação ou preenchimento, inclusive explodido em linhas."},
+    "annotation":{"label":"Anotação / projeção","color":"#64748b","destination":"preserved","meaning":"Textos, carimbos e referências gráficas sem volume físico."},
+    "other":{"label":"Outra entidade CAD","color":"#94a3b8","destination":"preserved","meaning":"Descrever o que é e por que não tem correspondência nativa; manter inventário completo."},
+    "unresolved":{"label":"Interpretação não resolvida","color":"#d97706","destination":"blocked","meaning":"Ambiguidade material; não publicar uma conversão como concluída."}
+  },
+  "native": {
+    "floorplan": "{corners:{c1:{x:number,y:number},...},walls:[{corner1:'c1',corner2:'c2',cad:{thicknessCm:number,heightCm:number}}],wallTextures:[],floorTextures:{},newFloorTextures:{}}",
+    "floorBoundary": "Parede topológica com cad:{floorBoundary:true}; adaptador aplica espessura/altura zero. Usar somente bordas de piso reais e conexões justificadas entre face e eixo.",
+    "rooms": "O motor encontra pisos pelos ciclos do grafo. A IA deve entregar grafo planar conectado com cantos compartilhados e interseções divididas, sem arestas sobrepostas ou duplicadas. Não existe campo rooms para importar pisos arbitrários.",
+    "walls": "Retas em um plano. A IA segmenta curvas quando necessário e declara a aproximação. Espessura e altura são locais por parede, via cad. O motor não preserva esses campos fora desta integração.",
+    "items": "{item_name:string,item_type:7|3,model_url:string,xpos:number,ypos:number,zpos:number,rotation:number,scale_x:number,scale_y:number,scale_z:number,fixed:false,cad_opening:{kind:'door'|'window',sourceIds:['e...'],widthCm:number,start:{x,y},end:{x,y}}}",
+    "itemPlacement": "xpos/zpos é o centro do vão no eixo da parede; ypos=peitoril+altura/2; escala física=dimensão em cm / dimensão do modelo fornecida no catálogo. Porta=7, janela=3. Não usar URLs externas.",
+    "missingDimensions": "Alturas/peitoris ausentes precisam de premissa explícita em assumptions. Nunca declarar uma premissa como medida do CAD. Use dimensões informadas no próprio CAD quando existirem."
+  },
+  "response": {
+    "contractVersion":"cad-blueprint3d/2",
+    "unit":"m|cm|mm|in|ft",
+    "unitEvidence":"evidência técnica verificável",
+    "transform":{"origin":{"x":0,"y":0},"scaleToCm":100,"invertY":true},
+    "assignments":[{"role":"categoria do contrato","ids":["e0","e1/b3"]}],
+    "design":{"floorplan":"objeto nativo descrito acima","items":"array nativo descrito acima"},
+    "provenance":{"walls":[{"wallIndex":0,"sourceIds":["e0","e1"],"reason":"como a geometria de origem justifica este eixo/contorno"}],"items":[{"itemIndex":0,"wallIndex":0,"sourceIds":["e2"],"reason":"agrupamento e posição do único vão"}]},
+    "assumptions":[{"property":"propriedade ausente","value":"premissa declarada","reason":"justificativa","sourceIds":[]}],
+    "notes":["limitações, aproximações e disposições sem equivalente nativo"]
+  },
+  "rules": [
+    "Todas as entidades raiz recebem categoria; INSERT transmite papel a descendentes, que podem sobrescrever com seus IDs. IDs não podem ser repetidos.",
+    "Cada parede e objeto nativo tem provenance com IDs da fonte. Todo wall_face,wall_axis,wall_detail,floor_boundary,door,window deve ser referenciado por pelo menos uma parede ou objeto correspondente.",
+    "Não usar templates de casas, contagem prévia de cômodos, nomes de arquivos, prefixos de blocos nem cores de camada como regras universais.",
+    "Agrupar representações redundantes do mesmo elemento físico, mantendo todas as referências de origem.",
+    "As categorias preservadas permanecem no inventário e na vista vetorial; declarar limitações de 3D nas notas.",
+    "O aplicativo não corrige nem completa a geometria da resposta: falhas retornam como diagnóstico à IA."
+  ]
+}

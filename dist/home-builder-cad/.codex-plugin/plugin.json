@@ -1,0 +1,9 @@
+{
+  "name": "home-builder-cad",
+  "version": "1.0.0",
+  "description": "Conversor de plantas DWG/DXF para o editor original Blueprint3D, com visualização 2D e modelo 3D.",
+  "author": {
+    "name": "Julio Lima Costa Valladares"
+  },
+  "license": "MIT"
+}

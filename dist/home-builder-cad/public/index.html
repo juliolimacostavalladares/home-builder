@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home Builder • Blueprint3D</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:#f3f5f7;color:#182535;height:100vh;display:flex;flex-direction:column}header{padding:14px 22px;background:#172635;color:white;display:flex;gap:22px;align-items:center}header strong{font-size:19px}header span{color:#b8c6d2}header a{color:#d4e5ff;margin-left:auto}form{padding:14px 22px;display:flex;align-items:end;gap:14px;flex-wrap:wrap;border-bottom:1px solid #d0d8df}label{display:grid;gap:5px;font-size:12px;color:#465767}input,select,button{font:inherit;padding:8px;border:1px solid #bbc8d2;border-radius:5px;background:white;color:#182535}input[type=file]{max-width:270px}select[multiple]{min-width:140px;height:62px}button{cursor:pointer}button.primary{background:#246aaf;color:white;border-color:#246aaf}button:disabled{opacity:.5;cursor:wait}#status{padding:8px 22px;margin:0;font-size:13px}#warnings{margin:0;padding:0 22px 8px;color:#76521b}#warnings:empty{display:none}iframe{flex:1;min-height:400px;border:0;width:100%;background:white}details{font-size:12px;max-width:100%}#thickness{width:78px}#editor-result{margin-left:auto;font-size:12px}
+#stages{display:flex;flex-wrap:wrap;gap:8px 24px;padding:0 40px;font-size:12px}#technical{padding:12px 22px;background:#fff;border-block:1px solid #ccd6df}summary{cursor:pointer;font-weight:600}.technical-toolbar,#filters{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0}#filters label{display:flex;align-items:center}#artifacts a{margin-right:12px}.review{display:grid;grid-template-columns:minmax(0,3fr) minmax(240px,1fr);gap:12px}#vector{width:100%;height:570px;border:1px solid #d0d8df}#entity{white-space:pre-wrap;overflow:auto;max-height:570px;padding:12px;background:#f3f5f7;font-size:11px}@media(max-width:750px){.review{grid-template-columns:1fr}}
+[hidden]{display:none!important}#view-navigation{padding:12px 22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fff;border-block:1px solid #d0d8df}#view-navigation button[aria-pressed=true]{background:#246aaf;color:#fff;border-color:#246aaf}button:disabled{cursor:not-allowed}#model-status{color:#526475;font-size:12px}#viewer-placeholder{padding:48px 22px;text-align:center;color:#526475;background:#fff;flex:1}#editor{min-height:600px;flex-shrink:0}#status[data-state=error]{color:#a42a24;background:#fff0ee}
+</style></head>
+<body>
+<header><strong>Home Builder</strong><span>Blueprint3D · Editor original 2D e 3D</span><a href="/planta-2d.html" style="margin-left: auto; margin-right: 14px;">📐 Planta 2D Técnica (Sem IA) ↗</a><a href="/cad.html">Conversão técnica e Humanizada IA ↗</a></header>
+<form id="import-form">
+<label>Planta CAD<input id="cad-file" type="file" accept=".dwg,.dxf"></label>
+<button id="sample" type="button">Usar planta de exemplo</button>
+<button id="extract-2d" type="button" disabled>📐 Extrair Planta 2D (Sem IA)</button>
+<button class="primary" id="import" disabled>Interpretar CAD com IA</button>
+<button id="download" type="button" disabled>Baixar .blueprint3d</button>
+<a href="/api/blueprint3d/contract" target="_blank" rel="noopener">Contrato CAD → Blueprint3D</a><a id="recent" hidden></a><span id="editor-result"></span>
+</form>
+<p id="status" role="status">Selecione um CAD e clique em Interpretar CAD com IA.</p>
+<ol id="stages" aria-label="Etapas da conversão"></ol>
+<details id="warnings"></details>
+<nav id="view-navigation" aria-label="Visualizações da planta">
+<button id="view-cad" type="button" disabled aria-pressed="false">Ver CAD 2D</button>
+<button id="view-plan" type="button" disabled aria-pressed="false">Planta 2D · Blueprint3D</button>
+<button id="view-model" type="button" disabled aria-pressed="false">Modelo 3D · Blueprint3D</button>
+<span id="model-status">O modelo 3D ficará disponível após a conversão e validação.</span>
+</nav>
+<div id="viewer-placeholder">O desenho CAD aparecerá aqui após a leitura do arquivo.</div>
+<details id="technical" hidden><summary>Conferir entidades, cores e dados técnicos</summary>
+<div class="technical-toolbar"><label>Visualização<select id="view"><option value="layers.svg">Camadas originais CAD</option><option value="source.svg">Desenho original</option><option value="semantic.svg">Categorias interpretadas pela IA</option></select></label><span id="artifacts"></span></div>
+<p id="view-description">O desenho original preserva as cores do CAD.</p>
+<div id="filters"></div><div class="review"><object id="vector" type="image/svg+xml" aria-label="Planta vetorizada com legenda"></object><pre id="entity">Selecione uma entidade para consultar seu ID, camada, classificação e dados CAD.</pre></div>
+</details>
+<iframe id="editor" title="Aplicação Blueprint3D original" src="/blueprint3d/" hidden></iframe>
+<script src="/import-blueprint.js"></script>
+</body></html>

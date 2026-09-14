@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Planta 2D Técnica · Cores por Camada (Sem IA)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px system-ui, -apple-system, sans-serif;
+      background: #f3f5f7;
+      color: #182535;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 12px 22px;
+      background: #172635;
+      color: white;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+    header strong { font-size: 18px; }
+    header span { color: #b8c6d2; font-size: 13px; }
+    header a { color: #d4e5ff; margin-left: auto; text-decoration: none; font-size: 13px; }
+    header a:hover { text-decoration: underline; }
+    .badge {
+      background: #0f766e;
+      color: #fff;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    form {
+      padding: 12px 22px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      background: #ffffff;
+      border-bottom: 1px solid #d0d8df;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #465767;
+    }
+    input, select, button {
+      font: inherit;
+      padding: 8px 12px;
+      border: 1px solid #bbc8d2;
+      border-radius: 6px;
+      background: white;
+      color: #182535;
+    }
+    input[type=file] { max-width: 270px; padding: 5px; }
+    button { cursor: pointer; font-weight: 500; transition: background 0.15s; }
+    button.primary {
+      background: #0f766e;
+      color: white;
+      border-color: #0f766e;
+      font-weight: 600;
+    }
+    button.primary:hover:not(:disabled) { background: #115e59; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #status {
+      padding: 8px 22px;
+      margin: 0;
+      font-size: 13px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    #status[data-state=error] { color: #a42a24; background: #fff0ee; }
+    .toolbar {
+      padding: 10px 22px;
+      background: #fff;
+      border-bottom: 1px solid #d0d8df;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .toolbar-title {
+      font-weight: 600;
+      color: #1e293b;
+      font-size: 13px;
+    }
+    .artifacts-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+    .artifacts-group a, .artifacts-group button {
+      font-size: 12px;
+      text-decoration: none;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      color: #0f172a;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .artifacts-group a:hover, .artifacts-group button:hover {
+      background: #e2e8f0;
+    }
+    .btn-export-all {
+      background: #0284c7 !important;
+      color: #fff !important;
+      border-color: #0284c7 !important;
+      font-weight: 600 !important;
+    }
+    .btn-export-all:hover { background: #0369a1 !important; }
+    .view-desc {
+      padding: 6px 22px;
+      margin: 0;
+      font-size: 12px;
+      color: #64748b;
+      background: #fff;
+    }
+    .main-workspace {
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
+      gap: 12px;
+      padding: 12px 22px;
+      overflow: hidden;
+    }
+    @media(max-width: 850px) {
+      .main-workspace { grid-template-columns: 1fr; overflow-y: auto; }
+    }
+    #vector-frame {
+      width: 100%;
+      height: 100%;
+      min-height: 520px;
+      border: 1px solid #d0d8df;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+    .side-inspector {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+      overflow: hidden;
+    }
+    .inspector-card {
+      background: #ffffff;
+      border: 1px solid #d0d8df;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+    .inspector-card h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    #entity-data {
+      margin: 0;
+      white-space: pre-wrap;
+      overflow: auto;
+      flex: 1;
+      padding: 10px;
+      background: #f8fafc;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      font: 11px/1.4 monospace;
+      color: #334155;
+    }
+    #placeholder-view {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #64748b;
+      font-size: 14px;
+      background: #ffffff;
+      margin: 12px 22px;
+      border: 2px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 40px;
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <strong>Home Builder</strong>
+  <span class="badge">100% CAD Vetorial Puro</span>
+  <span>Planta 2D Técnica · Cores por Camada (Sem IA)</span>
+  <a href="/">← Voltar para Blueprint3D 3D</a>
+</header>
+
+<form id="cad-form">
+  <label>
+    Arquivo CAD (.dwg / .dxf)
+    <input id="file-input" type="file" accept=".dwg,.dxf">
+  </label>
+  <button id="sample-btn" type="button">Usar planta de exemplo (160m²)</button>
+  <button id="process-btn" type="submit" class="primary" disabled>Visualizar Planta 2D Técnica</button>
+  <span id="counts-badge" style="color: #64748b; font-size: 12px; margin-left: 8px;"></span>
+</form>
+
+<p id="status" role="status">Selecione uma planta CAD para visualizar as camadas originais e exportar todos os artefatos técnicos.</p>
+
+<div class="toolbar" id="toolbar" hidden>
+  <label style="flex-direction:row; align-items:center; gap:8px;">
+    <span class="toolbar-title">Camada/Visualização:</span>
+    <select id="view-select">
+      <option value="layers.svg">Camadas originais CAD (com Legenda)</option>
+      <option value="source.svg">Desenho original com cores do CAD</option>
+    </select>
+  </label>
+
+  <div class="artifacts-group" id="artifacts-container">
+    <button type="button" id="btn-export-all" class="btn-export-all" title="Baixar todos os artefatos gerados desta planta">
+      📦 Baixar Todos os Artefatos
+    </button>
+  </div>
+</div>
+
+<p class="view-desc" id="view-desc" hidden>
+  Cores por camada original do CAD. Elas ainda não representam categorias identificadas pela IA.
+</p>
+
+<div id="placeholder-view">
+  Nenhum arquivo CAD aberto. Selecione um arquivo .dwg ou .dxf acima ou clique em "Usar planta de exemplo".
+</div>
+
+<main class="main-workspace" id="workspace" hidden>
+  <object id="vector-frame" type="image/svg+xml" aria-label="Planta 2D CAD vetorizada"></object>
+  
+  <aside class="side-inspector">
+    <div class="inspector-card">
+      <h3>🔍 Inspetor Técnico da Entidade</h3>
+      <small style="color:#64748b; margin-bottom: 6px;">Clique em qualquer linha, bloco ou texto na planta para consultar ID, camada e coordenadas.</small>
+      <pre id="entity-data">Selecione uma entidade para consultar seu ID, camada, classificação e dados CAD.</pre>
+    </div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let selectedFile = null;
+  let isBusy = false;
+  let currentArtifacts = {};
+  let currentInventory = null;
+  let currentJobId = null;
+
+  function setStatus(msg, state = '') {
+    $('status').textContent = msg;
+    $('status').setAttribute('data-state', state);
+  }
+
+  function setControls() {
+    $('process-btn').disabled = isBusy || !selectedFile;
+    $('sample-btn').disabled = isBusy;
+    $('file-input').disabled = isBusy;
+  }
+
+  $('file-input').addEventListener('change', e => {
+    if (e.target.files[0]) {
+      selectedFile = e.target.files[0];
+      setControls();
+      setStatus(`${selectedFile.name}: arquivo carregado. Clique em Visualizar Planta 2D Técnica.`);
+    }
+  });
+
+  $('sample-btn').addEventListener('click', async () => {
+    isBusy = true; setControls();
+    setStatus('Carregando planta de exemplo...');
+    try {
+      const res = await fetch('/samples/Planta_3_quartos-160m2.dwg');
+      if (!res.ok) throw new Error('Não foi possível carregar a planta de exemplo.');
+      const blob = await res.blob();
+      selectedFile = new File([blob], 'Planta_3_quartos-160m2.dwg');
+      setControls();
+      setStatus(`${selectedFile.name}: exemplo carregado. Clique em Visualizar Planta 2D Técnica.`);
+    } catch (err) {
+      setStatus(err.message, 'error');
+    } finally {
+      isBusy = false; setControls();
+    }
+  });
+
+  $('cad-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (!selectedFile || isBusy) return;
+    isBusy = true; setControls();
+    setStatus('Processando CAD e gerando visualização vetorial 2D (sem IA)...');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      const res = await fetch('/api/blueprint3d/jobs?mode=2d', {
+        method: 'POST',
+        body: formData
+      });
+      let job = await res.json();
+      if (!res.ok) throw new Error(job.error || 'Erro ao processar CAD');
+
+      currentJobId = job.id;
+      history.replaceState(null, '', `?job=${encodeURIComponent(job.id)}`);
+      await pollJob(job);
+    } catch (err) {
+      setStatus(err.message, 'error');
+    } finally {
+      isBusy = false; setControls();
+    }
+  });
+
+  async function pollJob(job) {
+    while (job.status === 'running') {
+      setStatus(job.stages.at(-1)?.message || 'Processando CAD...');
+      await new Promise(r => setTimeout(r, 800));
+      const res = await fetch(`/api/blueprint3d/jobs/${job.id}`);
+      job = await res.json();
+      if (!res.ok) throw new Error(job.error || 'Falha ao consultar processamento');
+    }
+
+    if (job.status !== 'ready') {
+      throw new Error(job.error || 'Falha ao gerar visualização 2D.');
+    }
+
+    await loadArtifacts(job);
+    setStatus(`Planta 2D carregada com sucesso! Todas as camadas e artefatos preservados.`);
+  }
+
+  async function loadArtifacts(job) {
+    currentArtifacts = job.artifacts || {};
+    $('placeholder-view').hidden = true;
+    $('workspace').hidden = false;
+    $('toolbar').hidden = false;
+    $('view-desc').hidden = false;
+
+    if (currentArtifacts['inventory.json']) {
+      try {
+        currentInventory = await (await fetch(currentArtifacts['inventory.json'])).json();
+        if (currentInventory?.instances) {
+          $('counts-badge').textContent = `${currentInventory.instances.length} entidades catalogadas`;
+        }
+      } catch (_) {}
+    }
+
+    renderArtifactButtons(job);
+    renderView();
+  }
+
+  function renderView() {
+    const chosen = $('view-select').value;
+    const targetUrl = currentArtifacts[chosen] || currentArtifacts['layers.svg'] || currentArtifacts['source.svg'];
+    if (targetUrl) {
+      $('vector-frame').data = targetUrl;
+    }
+  }
+
+  $('view-select').addEventListener('change', renderView);
+
+  function renderArtifactButtons(job) {
+    const list = [
+      ['layers.svg', '🎨 Camadas SVG'],
+      ['source.svg', '📐 CAD Original SVG'],
+      ['source.png', '🖼️ Imagem PNG'],
+      ['source.dxf', '📑 DXF Técnico'],
+      ['inventory.json', '📋 Inventário JSON'],
+      ['layer-filter.json', '🔍 Filtro Camadas'],
+      ['report.json', '📊 Relatório']
+    ];
+
+    const container = $('artifacts-container');
+    container.innerHTML = '';
+
+    // Botão de download de todos os arquivos
+    const btnAll = document.createElement('button');
+    btnAll.type = 'button';
+    btnAll.className = 'btn-export-all';
+    btnAll.textContent = '📦 Baixar Todos os Artefatos';
+    btnAll.onclick = downloadAllArtifacts;
+    container.appendChild(btnAll);
+
+    // Links individuais
+    for (const [key, label] of list) {
+      if (currentArtifacts[key]) {
+        const a = document.createElement('a');
+        a.href = currentArtifacts[key];
+        a.download = `${job.filename || 'cad'}-${key}`;
+        a.textContent = label;
+        a.target = '_blank';
+        container.appendChild(a);
+      }
+    }
+  }
+
+  async function downloadAllArtifacts() {
+    if (!Object.keys(currentArtifacts).length) return;
+    setStatus('Iniciando download dos artefatos...');
+    for (const [key, url] of Object.entries(currentArtifacts)) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = key;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      await new Promise(r => setTimeout(r, 200));
+    }
+    setStatus('Download de todos os artefatos concluído.');
+  }
+
+  // Interatividade com SVG: clique na entidade exibe metadados
+  $('vector-frame').addEventListener('load', () => {
+    const doc = $('vector-frame').contentDocument;
+    if (!doc) return;
+
+    doc.addEventListener('click', event => {
+      const shape = event.target.closest('[data-entity-id]');
+      if (!shape) return;
+
+      const id = shape.dataset.entityId;
+      const layer = shape.dataset.layer || 'Desconhecida';
+      const record = currentInventory?.instances?.find(item => item.id === id);
+
+      if (record) {
+        $('entity-data').textContent = JSON.stringify({
+          entityId: id,
+          layer: layer,
+          type: record.type,
+          handle: record.handle,
+          worldPosition: record.worldPosition,
+          details: record
+        }, null, 2);
+      } else {
+        $('entity-data').textContent = `ID: ${id}\nCamada: ${layer}\n(Dados adicionais preservados no inventário)`;
+      }
+    });
+  });
+
+  // Carregar job da URL se existir (?job=...)
+  const resumeId = new URLSearchParams(location.search).get('job');
+  if (resumeId) {
+    window.addEventListener('load', async () => {
+      isBusy = true; setControls();
+      try {
+        const res = await fetch(`/api/blueprint3d/jobs/${encodeURIComponent(resumeId)}`);
+        const job = await res.json();
+        if (!res.ok) throw new Error(job.error);
+        await pollJob(job);
+      } catch (err) {
+        setStatus(err.message, 'error');
+      } finally {
+        isBusy = false; setControls();
+      }
+    });
+  }
+})();
+</script>
+
+</body>
+</html>
