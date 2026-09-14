@@ -1,12 +1,37 @@
-# CAD 2D & Planta Humanizada com IA (9Router + OpenAI Codex)
+# Home Builder com Blueprint3D original
 
-Solução completa em **Node.js** para engenharia e arquitetura que converte arquivos **DWG e DXF** em:
-1. **Plantas Técnicas 2D:** SVG vetorial nítido (com zoom infinito), PNG de alta resolução e PDF pronto para plotagem.
-2. **Raio-X de Cômodos (DXF Deep Extraction):** Extração de dados brutos do CAD (nomes de ambientes, coordenadas, louças sanitárias, equipamentos de cozinha, portas e cotas) interpretados via IA.
-3. **Planta Humanizada Foto-Realista:** Renderização fidedigna com o modelo **`cx/gpt-image-2.5`** (OpenAI Codex via 9Router) posicionando os móveis e acabamentos rigorosamente nos cômodos corretos.
-4. **Auditoria de Fidelidade:** Ferramentas visuais interativas para comparar e verificar o desenho: **Sobrepor Traçado CAD**, visualização **Lado a Lado** e **Cortina Antes/Depois**.
+O projeto inteiro de [furnishup/blueprint3d](https://github.com/furnishup/blueprint3d) está incorporado em `vendor/blueprint3d/`, a partir do [fork completo](https://github.com/juliolimacostavalladares/blueprint3d). A página principal abre a aplicação original, com editor 2D, ambiente 3D, móveis, texturas e salvar/carregar. O motor 3D próprio anterior foi removido.
 
----
+```sh
+pnpm install
+pnpm build:blueprint
+pnpm start
+```
+
+Abra http://localhost:3000 (o servidor informa outra porta se estiver ocupada).
+
+1. Selecione DWG/DXF ou a planta de exemplo e clique em **Interpretar CAD com IA**.
+2. Acompanhe extração, vetorização, inventário, interpretação, adaptação e validação.
+3. Confira as camadas originais ou as categorias por cores. Clique num elemento para consultar seus dados CAD e use os filtros da legenda.
+4. Após validação, use **Edit Floorplan**, **Design** e **Add Items** no editor original. **Baixar .blueprint3d** exporta o estado atual.
+
+A IA recebe o CAD completo, imagens e o contrato v2 do Blueprint3D no serviço 9Router configurado. Ela entrega diretamente o JSON nativo, com geometria, dimensões locais e proveniência. O código valida essa resposta sem reconstruir paredes por heurísticas. Conversões que não passam no validador não substituem o modelo anterior. Não há garantia de interpretação universal para CAD ambíguo. Alturas ausentes usam valores padrão indicados no relatório.
+
+**Cores:** paredes verdes, pisos vermelhos, janelas roxas, portas marrons; legendas e IDs acompanham o SVG. É uma convenção visual do projeto. O piso é derivado das paredes, não inventado como entidade CAD original.
+
+### API e validação
+
+- `POST /api/blueprint3d/jobs`: upload multipart `file`; retorna ID para acompanhar em `GET /api/blueprint3d/jobs/:id`.
+- `/outputs/<id>/`: DXF, imagem, SVG original, SVG de camadas, inventário JSON, interpretação, SVG semântico e relatório. Arquivo nativo só é publicado após validação.
+- `POST /api/blueprint3d`: usa o mesmo fluxo de IA de `/jobs`; a conversão geométrica antiga foi retirada das rotas.
+- `GET /api/blueprint3d/contract`: contrato completo de entrada/saída e catálogo de modelos nativos.
+- Conversão técnica SVG/PNG/PDF/DXF e Humanizada IA continuam em `/cad.html`.
+
+Configure `NINEROUTER_URL`, `NINEROUTER_KEY` e opcionalmente `CAD_BLUEPRINT_MODEL`. `pnpm test` verifica o motor original, regressões geométricas, rastreabilidade, cores, contrato da IA e pipeline com IA simulada, sem enviar plantas. Os testes do contrato v2 usam respostas controladas e verificam que a geometria da IA é preservada integralmente. A versão v2 ainda aguarda validação real do provedor. Veja [integration/UPSTREAM.md](integration/UPSTREAM.md).
+
+Detalhes do fluxo atual em [docs/contrato-conversao-ia.md](docs/contrato-conversao-ia.md).
+
+## Funcionalidades técnicas e IA existentes
 
 ## 🚀 Arquitetura e Tecnologias
 
